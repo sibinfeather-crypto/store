@@ -272,6 +272,16 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onNavigate }) => {
                 <ArrowRight className="w-4 h-4" />
               </button>
 
+              <button
+                onClick={() => {
+                  setIsCartOpen(false);
+                  onNavigate('cart');
+                }}
+                className="w-full py-2 text-center text-xs font-semibold text-[#087A42] hover:text-[#066336] transition-colors cursor-pointer"
+              >
+                View Full Cart Page
+              </button>
+
               <div className="flex items-center justify-center gap-2 text-[10px] text-[#5E695E]">
                 <span>🔒 Safe & Secure Pan-India Checkout</span>
                 <span>·</span>

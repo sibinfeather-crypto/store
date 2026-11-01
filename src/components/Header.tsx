@@ -18,10 +18,11 @@ import type { Product } from '../types/index.ts';
 
 interface HeaderProps {
   currentView: string;
+  currentParam?: string;
   onNavigate: (view: string, param?: string) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
+export const Header: React.FC<HeaderProps> = ({ currentView, currentParam = '', onNavigate }) => {
   const { itemCount, setIsCartOpen } = useCart();
   const { itemCount: wishlistCount } = useWishlist();
   const { isAdminLoggedIn } = useAuth();
@@ -67,10 +68,19 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
     setSearchQuery('');
   };
 
+  const isCategoryActive = (slugOrName: string) => {
+    if (currentView === slugOrName) return true;
+    if (currentView === 'category') {
+      const p = currentParam.toLowerCase();
+      return p.includes(slugOrName.toLowerCase());
+    }
+    return false;
+  };
+
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E5E8E3] transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-18 gap-4 lg:gap-8">
+        <div className="flex items-center justify-between h-18 gap-3 lg:gap-6">
           
           {/* Mobile menu trigger */}
           <button
@@ -90,33 +100,65 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
             <img
               src="/assets/aistudio/fankostore.logo_1f90e1f5.png"
               alt="FanKO Store"
-              className="h-11 sm:h-12 w-auto object-contain"
+              className="h-10 sm:h-12 w-auto object-contain"
               referrerPolicy="no-referrer"
             />
           </button>
 
           {/* Zone 2: Navigation Links (Desktop) */}
-          <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-[#202720]">
+          <nav className="hidden lg:flex items-center gap-5 xl:gap-6 text-sm font-medium text-[#202720]">
             <button
               onClick={() => onNavigate('home')}
-              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer ${
-                currentView === 'home' ? 'text-[#087A42] font-semibold' : ''
+              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 ${
+                currentView === 'home' ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : ''
               }`}
             >
               Home
             </button>
             <button
               onClick={() => onNavigate('shop')}
-              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer ${
-                currentView === 'shop' ? 'text-[#087A42] font-semibold' : ''
+              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 ${
+                currentView === 'shop' ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : ''
               }`}
             >
               Shop All
             </button>
             <button
+              onClick={() => onNavigate('kitchen')}
+              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 ${
+                isCategoryActive('kitchen') ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : 'text-[#4A554A]'
+              }`}
+            >
+              Kitchen
+            </button>
+            <button
+              onClick={() => onNavigate('organization')}
+              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 ${
+                isCategoryActive('organization') ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : 'text-[#4A554A]'
+              }`}
+            >
+              Organization
+            </button>
+            <button
+              onClick={() => onNavigate('storage')}
+              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 ${
+                isCategoryActive('storage') ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : 'text-[#4A554A]'
+              }`}
+            >
+              Storage
+            </button>
+            <button
+              onClick={() => onNavigate('cleaning')}
+              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 ${
+                isCategoryActive('cleaning') ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : 'text-[#4A554A]'
+              }`}
+            >
+              Cleaning
+            </button>
+            <button
               onClick={() => onNavigate('track-order')}
-              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1 ${
-                currentView === 'track-order' ? 'text-[#087A42] font-semibold' : 'text-[#5E695E]'
+              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 flex items-center gap-1 ${
+                currentView === 'track-order' ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : 'text-[#4A554A]'
               }`}
             >
               <Package className="w-3.5 h-3.5" />
@@ -124,16 +166,16 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
             </button>
             <button
               onClick={() => onNavigate('about')}
-              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer ${
-                currentView === 'about' ? 'text-[#087A42] font-semibold' : 'text-[#5E695E]'
+              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 ${
+                currentView === 'about' ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : 'text-[#4A554A]'
               }`}
             >
-              About Us
+              About
             </button>
             <button
               onClick={() => onNavigate('contact')}
-              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer ${
-                currentView === 'contact' ? 'text-[#087A42] font-semibold' : 'text-[#5E695E]'
+              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 ${
+                currentView === 'contact' ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : 'text-[#4A554A]'
               }`}
             >
               Contact
@@ -302,7 +344,7 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
                     onNavigate('home');
                     setMobileMenuOpen(false);
                   }}
-                  className="w-full text-left py-2.5 px-3 rounded-lg text-sm font-semibold hover:bg-[#F7F8F6] text-[#202720]"
+                  className="w-full text-left py-2 px-3 rounded-lg text-sm font-semibold hover:bg-[#F7F8F6] text-[#202720]"
                 >
                   Home
                 </button>
@@ -311,29 +353,96 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
                     onNavigate('shop');
                     setMobileMenuOpen(false);
                   }}
-                  className="w-full text-left py-2.5 px-3 rounded-lg text-sm font-semibold hover:bg-[#F7F8F6] text-[#202720]"
+                  className="w-full text-left py-2 px-3 rounded-lg text-sm font-semibold hover:bg-[#F7F8F6] text-[#202720]"
                 >
                   Shop All Products
                 </button>
 
+                {/* Separate Department Pages */}
+                <div className="py-1 px-3 text-[11px] font-bold text-[#5E695E] uppercase tracking-wider">
+                  Departments
+                </div>
                 <button
                   onClick={() => {
-                    onNavigate('about');
+                    onNavigate('kitchen');
                     setMobileMenuOpen(false);
                   }}
-                  className="w-full text-left py-2.5 px-3 rounded-lg text-sm font-semibold hover:bg-[#F7F8F6] text-[#202720]"
+                  className="w-full flex items-center justify-between py-2 px-3 rounded-lg text-sm font-medium hover:bg-[#F7F8F6] text-[#202720]"
                 >
-                  About Us
+                  <span className="flex items-center gap-2"><span>🍳</span> Kitchen Essentials</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
                 </button>
                 <button
                   onClick={() => {
-                    onNavigate('contact');
+                    onNavigate('organization');
                     setMobileMenuOpen(false);
                   }}
-                  className="w-full text-left py-2.5 px-3 rounded-lg text-sm font-semibold hover:bg-[#F7F8F6] text-[#202720]"
+                  className="w-full flex items-center justify-between py-2 px-3 rounded-lg text-sm font-medium hover:bg-[#F7F8F6] text-[#202720]"
                 >
-                  Contact Support
+                  <span className="flex items-center gap-2"><span>✨</span> Home Organization</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
                 </button>
+                <button
+                  onClick={() => {
+                    onNavigate('storage');
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between py-2 px-3 rounded-lg text-sm font-medium hover:bg-[#F7F8F6] text-[#202720]"
+                >
+                  <span className="flex items-center gap-2"><span>📦</span> Storage Solutions</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                </button>
+                <button
+                  onClick={() => {
+                    onNavigate('cleaning');
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full flex items-center justify-between py-2 px-3 rounded-lg text-sm font-medium hover:bg-[#F7F8F6] text-[#202720]"
+                >
+                  <span className="flex items-center gap-2"><span>🧼</span> Cleaning Accessories</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                </button>
+
+                <div className="pt-2 border-t border-[#E5E8E3] mt-2">
+                  <button
+                    onClick={() => {
+                      onNavigate('cart');
+                      setMobileMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 py-2 px-3 rounded-lg text-sm text-[#202720] hover:bg-[#F7F8F6]"
+                  >
+                    <ShoppingBag className="w-4 h-4 text-[#087A42]" />
+                    <span>Shopping Cart ({itemCount})</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onNavigate('wishlist');
+                      setMobileMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 py-2 px-3 rounded-lg text-sm text-[#202720] hover:bg-[#F7F8F6]"
+                  >
+                    <Heart className="w-4 h-4 text-[#FF7900]" />
+                    <span>Wishlist ({wishlistCount})</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      onNavigate('about');
+                      setMobileMenuOpen(false);
+                    }}
+                    className="w-full text-left py-2 px-3 rounded-lg text-sm font-medium hover:bg-[#F7F8F6] text-[#202720]"
+                  >
+                    About Us
+                  </button>
+                  <button
+                    onClick={() => {
+                      onNavigate('contact');
+                      setMobileMenuOpen(false);
+                    }}
+                    className="w-full text-left py-2 px-3 rounded-lg text-sm font-medium hover:bg-[#F7F8F6] text-[#202720]"
+                  >
+                    Contact Support
+                  </button>
+                </div>
 
                 <div className="pt-3 border-t border-[#E5E8E3] mt-3">
                   <button

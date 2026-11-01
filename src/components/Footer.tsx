@@ -109,18 +109,42 @@ export const Footer: React.FC<FooterProps> = ({
               </li>
               <li>
                 <button
-                  onClick={() => onNavigate('shop')}
+                  onClick={() => onNavigate('kitchen')}
                   className="hover:text-[#087A42] transition-colors cursor-pointer"
                 >
-                  Best Sellers
+                  Kitchen Essentials
                 </button>
               </li>
               <li>
                 <button
-                  onClick={() => onNavigate('shop')}
+                  onClick={() => onNavigate('organization')}
                   className="hover:text-[#087A42] transition-colors cursor-pointer"
                 >
-                  New Arrivals
+                  Home Organization
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => onNavigate('storage')}
+                  className="hover:text-[#087A42] transition-colors cursor-pointer"
+                >
+                  Storage Solutions
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => onNavigate('cleaning')}
+                  className="hover:text-[#087A42] transition-colors cursor-pointer"
+                >
+                  Cleaning Accessories
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => onNavigate('cart')}
+                  className="hover:text-[#087A42] transition-colors cursor-pointer font-medium text-[#087A42]"
+                >
+                  Shopping Cart
                 </button>
               </li>
               <li>
