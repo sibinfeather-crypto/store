@@ -168,7 +168,7 @@ export async function getSettingsFromFirestore(): Promise<StoreSettings | null> 
 }
 
 /**
- * Save store settings (including MX Pay and Razorpay credentials) to Firestore
+ * Save store settings (including UPI configuration and COD advance settings) to Firestore
  */
 export async function saveSettingsToFirestore(settings: Partial<StoreSettings>): Promise<void> {
   try {

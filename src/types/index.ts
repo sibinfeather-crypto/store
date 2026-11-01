@@ -83,8 +83,8 @@ export type OrderFulfillmentStatus =
   | 'cancelled'
   | 'refunded';
 
-export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';
-export type PaymentMethod = 'mxpay' | 'cod';
+export type PaymentStatus = 'pending' | 'paid' | 'advance_paid' | 'failed' | 'refunded';
+export type PaymentMethod = 'upi' | 'cod' | 'mxpay';
 
 export interface OrderItem {
   productId: string;
@@ -111,6 +111,23 @@ export interface ShippingDetails {
   deliveredAt?: string;
 }
 
+export interface OrderPaymentDetails {
+  mode?: 'upi' | 'cod' | 'live' | 'test';
+  upiApp?: 'gpay' | 'phonepe' | 'paytm' | 'other';
+  upiTransactionId?: string;
+  utrNumber?: string;
+  upiId?: string;
+  advancePaid?: number;
+  balanceDueOnDelivery?: number;
+  paidAt?: string;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  razorpaySignature?: string;
+  mxpayTransactionId?: string;
+  mxpayPaymentId?: string;
+  mxpayStatus?: string;
+}
+
 export interface Order {
   id: string;
   orderNumber: string; // e.g., FKO-2026-1042
@@ -124,16 +141,7 @@ export interface Order {
   paymentMethod: PaymentMethod;
   paymentStatus: PaymentStatus;
   fulfillmentStatus: OrderFulfillmentStatus;
-  paymentDetails?: {
-    razorpayOrderId?: string;
-    razorpayPaymentId?: string;
-    razorpaySignature?: string;
-    mxpayTransactionId?: string;
-    mxpayPaymentId?: string;
-    mxpayStatus?: string;
-    paidAt?: string;
-    mode?: 'live' | 'test' | 'cod';
-  };
+  paymentDetails?: OrderPaymentDetails;
   shippingDetails: ShippingDetails;
   statusHistory: OrderStatusEvent[];
   customerNotes?: string;
@@ -178,12 +186,16 @@ export interface StoreSettings {
   freeShippingThreshold: number;
   standardShippingFee: number;
   codEnabled: boolean;
+  codAdvanceAmount: number;
+  upiEnabled: boolean;
+  upiId: string;
+  upiPayeeName: string;
+  currency: string;
   mxPayEnabled?: boolean;
   mxPayApiKey?: string;
   mxPayMerchantId?: string;
   mxPaySecretKey?: string;
   mxPayTestMode?: boolean;
-  currency: string;
 }
 
 export interface AdminUser {

@@ -531,10 +531,10 @@ const initialSettings: StoreSettings = {
   freeShippingThreshold: 499,
   standardShippingFee: 49,
   codEnabled: true,
-  mxPayEnabled: true,
-  mxPayApiKey: process.env.MXPAY_API_KEY || '76D73A7E-B18F8999-9409FA32-A23F5F04-E2DB1357-1262E2D8',
-  mxPayMerchantId: process.env.MXPAY_MERCHANT_ID || 'FANKO_STORE',
-  mxPayTestMode: false,
+  codAdvanceAmount: 99,
+  upiEnabled: true,
+  upiId: 'fankostore@okhdfcbank',
+  upiPayeeName: 'FanKO Store',
   currency: 'INR',
 };
 
@@ -725,7 +725,12 @@ class JsonDatabase {
 
   public getSettings(): StoreSettings {
     return {
+      ...initialSettings,
       ...this.data.settings,
+      codAdvanceAmount: this.data.settings.codAdvanceAmount ?? 99,
+      upiEnabled: this.data.settings.upiEnabled ?? true,
+      upiId: this.data.settings.upiId || 'fankostore@okhdfcbank',
+      upiPayeeName: this.data.settings.upiPayeeName || 'FanKO Store',
     };
   }
 

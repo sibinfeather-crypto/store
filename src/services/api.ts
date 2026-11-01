@@ -496,14 +496,62 @@ export const api = {
 
 
 
-  // Cash on Delivery
-  async createCodOrder(data: {
+  // Generate UPI Intent and App Deep Links
+  async getUpiIntent(data: {
+    amount: number;
+    orderRef?: string;
+    type?: 'full' | 'cod';
+  }): Promise<{
+    success: boolean;
+    upiId: string;
+    payeeName: string;
+    amount: number;
+    orderNumber: string;
+    upiUri: string;
+    gpayUri: string;
+    phonepeUri: string;
+    paytmUri: string;
+    qrCodeUrl: string;
+  }> {
+    try {
+      return await safeJsonFetch(`${API_BASE}/upi/generate-intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+    } catch {
+      const settings = await api.getSettings();
+      const upiId = settings.upiId || 'fankostore@okhdfcbank';
+      const payeeName = settings.upiPayeeName || 'FanKO Store';
+      const orderNumber = data.orderRef || `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const note = encodeURIComponent(`Order ${orderNumber}`);
+      const baseQuery = `pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${data.amount}&cu=INR&tn=${note}`;
+
+      return {
+        success: true,
+        upiId,
+        payeeName,
+        amount: data.amount,
+        orderNumber,
+        upiUri: `upi://pay?${baseQuery}`,
+        gpayUri: `gpay://upi/pay?${baseQuery}`,
+        phonepeUri: `phonepe://pay?${baseQuery}`,
+        paytmUri: `paytmmp://pay?${baseQuery}`,
+        qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=10&data=${encodeURIComponent(`upi://pay?${baseQuery}`)}`,
+      };
+    }
+  },
+
+  // 100% Full UPI Payment
+  async createUpiOrder(data: {
     customer: ShippingAddress;
     items: { productId: string; quantity: number }[];
     couponCode?: string;
+    upiApp?: 'gpay' | 'phonepe' | 'paytm' | 'other';
+    utrNumber?: string;
   }): Promise<{ success: boolean; order: Order }> {
     try {
-      return await safeJsonFetch(`${API_BASE}/orders/cod`, {
+      return await safeJsonFetch(`${API_BASE}/orders/upi`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -511,6 +559,9 @@ export const api = {
     } catch {
       const orderNumber = `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
       const calculation = await api.calculateOrder(data.items, data.couponCode);
+      const settings = await api.getSettings();
+      const upiTxnId = `UPI_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
       const newOrder: Order = {
         id: `ord-${Date.now()}`,
         orderNumber,
@@ -521,17 +572,26 @@ export const api = {
         shippingFee: calculation.shippingFee,
         total: calculation.total,
         couponCode: data.couponCode,
-        paymentMethod: 'cod',
-        paymentStatus: 'pending',
+        paymentMethod: 'upi',
+        paymentStatus: 'paid',
         fulfillmentStatus: 'confirmed',
-        paymentDetails: { mode: 'cod' },
+        paymentDetails: {
+          mode: 'upi',
+          upiApp: data.upiApp || 'other',
+          upiTransactionId: upiTxnId,
+          utrNumber: data.utrNumber || upiTxnId,
+          upiId: settings.upiId || 'fankostore@okhdfcbank',
+          advancePaid: calculation.total,
+          balanceDueOnDelivery: 0,
+          paidAt: new Date().toISOString(),
+        },
         shippingDetails: {
           estimatedDelivery: '3-5 business days',
         },
         statusHistory: [
           {
             status: 'confirmed',
-            note: 'Order confirmed with Cash on Delivery (COD).',
+            note: `Order placed with 100% Full UPI Payment via ${data.upiApp ? data.upiApp.toUpperCase() : 'UPI'} (Amount: ₹${calculation.total}${data.utrNumber ? `, UTR: ${data.utrNumber}` : ''}). Payment verified.`,
             timestamp: new Date().toISOString(),
           },
         ],
@@ -543,25 +603,16 @@ export const api = {
     }
   },
 
-  // MX Pay Checkout
-  async createMxPayOrder(data: {
+  // Cash on Delivery with ₹99 Advance Payment via UPI / QR Code
+  async createCodOrder(data: {
     customer: ShippingAddress;
     items: { productId: string; quantity: number }[];
     couponCode?: string;
-  }): Promise<{
-    success: boolean;
-    orderId: string;
-    orderNumber: string;
-    mxpayTransactionId: string;
-    amount: number;
-    currency: string;
-    apiKey: string;
-    merchantId: string;
-    testMode: boolean;
-    message?: string;
-  }> {
+    upiApp?: 'gpay' | 'phonepe' | 'paytm' | 'other';
+    utrNumber?: string;
+  }): Promise<{ success: boolean; order: Order }> {
     try {
-      return await safeJsonFetch(`${API_BASE}/mxpay/create-order`, {
+      return await safeJsonFetch(`${API_BASE}/orders/cod`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -569,8 +620,10 @@ export const api = {
     } catch {
       const orderNumber = `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
       const calculation = await api.calculateOrder(data.items, data.couponCode);
-      const mxpayTxnId = `MXP_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
       const settings = await api.getSettings();
+      const advanceAmount = Math.min(settings.codAdvanceAmount ?? 99, calculation.total);
+      const balanceDue = Math.max(0, calculation.total - advanceAmount);
+      const upiTxnId = `COD_ADV_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
       const newOrder: Order = {
         id: `ord-${Date.now()}`,
@@ -582,20 +635,26 @@ export const api = {
         shippingFee: calculation.shippingFee,
         total: calculation.total,
         couponCode: data.couponCode,
-        paymentMethod: 'mxpay',
-        paymentStatus: 'pending',
-        fulfillmentStatus: 'pending_payment',
+        paymentMethod: 'cod',
+        paymentStatus: 'advance_paid',
+        fulfillmentStatus: 'confirmed',
         paymentDetails: {
-          mxpayTransactionId: mxpayTxnId,
-          mode: settings.mxPayTestMode ? 'test' : 'live',
+          mode: 'cod',
+          advancePaid: advanceAmount,
+          balanceDueOnDelivery: balanceDue,
+          upiApp: data.upiApp || 'other',
+          upiTransactionId: upiTxnId,
+          utrNumber: data.utrNumber || upiTxnId,
+          upiId: settings.upiId || 'fankostore@okhdfcbank',
+          paidAt: new Date().toISOString(),
         },
         shippingDetails: {
           estimatedDelivery: '3-5 business days',
         },
         statusHistory: [
           {
-            status: 'pending_payment',
-            note: `Order initiated with MX Pay gateway (Txn: ${mxpayTxnId}).`,
+            status: 'confirmed',
+            note: `Order confirmed with Cash on Delivery (COD). ₹${advanceAmount} advance verified via ${data.upiApp ? data.upiApp.toUpperCase() : 'UPI'}${data.utrNumber ? ` (UTR: ${data.utrNumber})` : ''}. Balance ₹${balanceDue} payable on delivery.`,
             timestamp: new Date().toISOString(),
           },
         ],
@@ -603,59 +662,7 @@ export const api = {
         updatedAt: new Date().toISOString(),
       };
       saveStoredOrder(newOrder);
-
-      return {
-        success: true,
-        orderId: newOrder.id,
-        orderNumber: newOrder.orderNumber,
-        mxpayTransactionId: mxpayTxnId,
-        amount: newOrder.total,
-        currency: 'INR',
-        apiKey: settings.mxPayApiKey || 'mx_key_sandbox',
-        merchantId: settings.mxPayMerchantId || 'MX_MERCHANT_DEFAULT',
-        testMode: settings.mxPayTestMode ?? true,
-        message: 'MX Pay checkout ready.',
-      };
-    }
-  },
-
-  async verifyMxPayPayment(data: {
-    orderId: string;
-    mxpayPaymentId: string;
-    mxpayTransactionId?: string;
-    isTestSimulated?: boolean;
-  }): Promise<{
-    success: boolean;
-    order: Order;
-    message?: string;
-  }> {
-    try {
-      return await safeJsonFetch(`${API_BASE}/mxpay/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-    } catch {
-      const orders = getStoredOrders();
-      const order = orders.find((o) => o.id === data.orderId || o.orderNumber === data.orderId);
-      if (order) {
-        order.paymentStatus = 'paid';
-        order.fulfillmentStatus = 'confirmed';
-        order.paymentDetails = {
-          ...order.paymentDetails,
-          mxpayPaymentId: data.mxpayPaymentId,
-          mxpayTransactionId: data.mxpayTransactionId || order.paymentDetails?.mxpayTransactionId,
-          paidAt: new Date().toISOString(),
-        };
-        order.statusHistory.push({
-          status: 'confirmed',
-          note: `Payment verified via MX Pay gateway (Payment ID: ${data.mxpayPaymentId}).`,
-          timestamp: new Date().toISOString(),
-        });
-        saveStoredOrder(order);
-        return { success: true, order };
-      }
-      throw new Error('Order not found for MX Pay verification');
+      return { success: true, order: newOrder };
     }
   },
 

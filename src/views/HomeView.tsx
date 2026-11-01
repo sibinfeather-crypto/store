@@ -99,8 +99,8 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <p className="text-[11px]">Free delivery &gt; ₹499</p>
                 </div>
                 <div>
-                  <p className="font-bold text-[#202720] text-sm tabular-nums">MX Pay & COD</p>
-                  <p className="text-[11px]">Secure checkout</p>
+                  <p className="font-bold text-[#202720] text-sm tabular-nums">UPI & COD</p>
+                  <p className="text-[11px]">Instant or ₹99 token</p>
                 </div>
                 <div>
                   <p className="font-bold text-[#202720] text-sm tabular-nums">7 Days</p>
@@ -267,9 +267,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <div className="w-12 h-12 rounded-2xl bg-[#E8F5EE] text-[#087A42] flex items-center justify-center mx-auto sm:mx-0">
                 <ShieldCheck className="w-6 h-6" />
               </div>
-              <h3 className="text-sm font-bold text-[#202720]">Secure Payment</h3>
+              <h3 className="text-sm font-bold text-[#202720]">Instant UPI & COD</h3>
               <p className="text-xs text-[#5E695E] leading-relaxed">
-                100% encrypted online payments via MX Pay (UPI, QR, RuPay, Cards, NetBanking) and Cash on Delivery.
+                Direct bank UPI via Google Pay, PhonePe, Paytm, QR code, and Cash on Delivery with ₹99 advance token.
               </p>
             </div>
 

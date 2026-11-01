@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck,
-  CreditCard,
   Truck,
   ArrowLeft,
   CheckCircle2,
   AlertCircle,
   Lock,
   Tag,
-  Info,
   QrCode,
   Smartphone,
-  Building2
+  Copy,
+  Check,
+  ExternalLink,
+  ChevronRight,
+  Wallet
 } from 'lucide-react';
 import { useCart } from '../context/CartContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
@@ -21,6 +23,21 @@ import type { ShippingAddress, Order } from '../types/index.ts';
 interface CheckoutViewProps {
   onNavigate: (view: string, param?: string) => void;
   onOrderCompleted: (order: Order) => void;
+}
+
+interface UpiModalData {
+  orderNumber: string;
+  amountToPay: number;
+  totalOrderAmount: number;
+  balanceOnDelivery: number;
+  upiId: string;
+  payeeName: string;
+  upiUri: string;
+  gpayUri: string;
+  phonepeUri: string;
+  paytmUri: string;
+  qrCodeUrl: string;
+  paymentType: 'upi' | 'cod';
 }
 
 export const CheckoutView: React.FC<CheckoutViewProps> = ({
@@ -41,40 +58,29 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     pincode: customer?.savedAddresses[0]?.pincode || '',
   });
 
-  const [paymentMethod, setPaymentMethod] = useState<'mxpay' | 'cod'>('mxpay');
+  const [paymentMethod, setPaymentMethod] = useState<'upi' | 'cod'>('cod');
   const [codAllowed, setCodAllowed] = useState(true);
-  const [mxPayAllowed, setMxPayAllowed] = useState(true);
+  const [upiAllowed, setUpiAllowed] = useState(true);
+  const [codAdvanceAmount, setCodAdvanceAmount] = useState(99);
+  const [storeUpiId, setStoreUpiId] = useState('fankostore@okhdfcbank');
+  const [storePayeeName, setStorePayeeName] = useState('FanKO Store');
   const [saveInfo, setSaveInfo] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // MX Pay Gateway Checkout Modal State
-  const [mxPayModalData, setMxPayModalData] = useState<{
-    orderId: string;
-    orderNumber: string;
-    transactionId: string;
-    amount: number;
-    apiKey: string;
-    merchantId: string;
-    testMode: boolean;
-  } | null>(null);
-  const [mxPayTab, setMxPayTab] = useState<'upi' | 'card' | 'netbanking'>('upi');
-  const [selectedUpiApp, setSelectedUpiApp] = useState<'gpay' | 'phonepe' | 'paytm' | 'bhim'>('gpay');
-  const [upiVpa, setUpiVpa] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCvv, setCardCvv] = useState('');
-  const [selectedBank, setSelectedBank] = useState('HDFC Bank');
+  // UPI Payment Modal State
+  const [upiModalData, setUpiModalData] = useState<UpiModalData | null>(null);
+  const [selectedApp, setSelectedApp] = useState<'gpay' | 'phonepe' | 'paytm' | 'other'>('gpay');
+  const [utrNumber, setUtrNumber] = useState('');
+  const [copiedUpi, setCopiedUpi] = useState(false);
 
   useEffect(() => {
     api.getSettings().then((s) => {
-      setCodAllowed(s.codEnabled);
-      setMxPayAllowed(s.mxPayEnabled ?? true);
-      if (s.mxPayEnabled !== false) {
-        setPaymentMethod('mxpay');
-      } else {
-        setPaymentMethod('cod');
-      }
+      setCodAllowed(s.codEnabled !== false);
+      setUpiAllowed(s.upiEnabled !== false);
+      if (s.codAdvanceAmount != null) setCodAdvanceAmount(s.codAdvanceAmount);
+      if (s.upiId) setStoreUpiId(s.upiId);
+      if (s.upiPayeeName) setStorePayeeName(s.upiPayeeName);
     }).catch(() => {});
   }, []);
 
@@ -118,7 +124,8 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     }
   };
 
-  const handlePlaceOrder = async (e: React.FormEvent) => {
+  // Step 1: Buyer clicks Place Order / Pay -> Opens UPI Intent & QR Modal
+  const handleInitiateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -140,82 +147,113 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     setIsProcessing(true);
 
     try {
+      const advanceAmount = Math.min(codAdvanceAmount, total);
+      const amountToPay = paymentMethod === 'cod' ? advanceAmount : total;
+      const balanceOnDelivery = paymentMethod === 'cod' ? Math.max(0, total - advanceAmount) : 0;
+      const tempOrderRef = `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      const upiData = await api.getUpiIntent({
+        amount: amountToPay,
+        orderRef: tempOrderRef,
+        type: paymentMethod === 'cod' ? 'cod' : 'full',
+      });
+
+      setUpiModalData({
+        orderNumber: upiData.orderNumber,
+        amountToPay,
+        totalOrderAmount: total,
+        balanceOnDelivery,
+        upiId: upiData.upiId || storeUpiId,
+        payeeName: upiData.payeeName || storePayeeName,
+        upiUri: upiData.upiUri,
+        gpayUri: upiData.gpayUri,
+        phonepeUri: upiData.phonepeUri,
+        paytmUri: upiData.paytmUri,
+        qrCodeUrl: upiData.qrCodeUrl,
+        paymentType: paymentMethod,
+      });
+
+      setIsProcessing(false);
+    } catch (err: any) {
+      setIsProcessing(false);
+      setError(err.message || 'Failed to initialize payment. Please try again.');
+    }
+  };
+
+  // Automatically open the chosen UPI app (GPay / PhonePe / Paytm / Universal UPI)
+  const handleLaunchUpiApp = (app: 'gpay' | 'phonepe' | 'paytm' | 'other') => {
+    setSelectedApp(app);
+    if (!upiModalData) return;
+
+    let targetUri = upiModalData.upiUri;
+    if (app === 'gpay') targetUri = upiModalData.gpayUri;
+    else if (app === 'phonepe') targetUri = upiModalData.phonepeUri;
+    else if (app === 'paytm') targetUri = upiModalData.paytmUri;
+
+    // Trigger native app intent on mobile or desktop
+    window.location.href = targetUri;
+
+    // Fallback: in case app scheme isn't registered, fallback to generic UPI after brief timeout
+    setTimeout(() => {
+      if (document.hasFocus()) {
+        // App didn't take focus immediately, try standard upi://
+        window.location.href = upiModalData.upiUri;
+      }
+    }, 1200);
+  };
+
+  const handleCopyUpiId = () => {
+    if (!upiModalData) return;
+    navigator.clipboard.writeText(upiModalData.upiId);
+    setCopiedUpi(true);
+    setTimeout(() => setCopiedUpi(false), 2000);
+  };
+
+  // Step 2: Buyer confirms payment completion -> Finalizes order on server & navigates to confirmation
+  const handleConfirmOrderPlacement = async () => {
+    if (!upiModalData) return;
+    setIsProcessing(true);
+    setError(null);
+
+    try {
       const payloadItems = items.map((i) => ({
         productId: i.productId,
         quantity: i.quantity,
       }));
 
-      // A. Cash on Delivery Flow
-      if (paymentMethod === 'cod') {
-        const result = await api.createCodOrder({
+      let result: { success: boolean; order: Order };
+
+      if (upiModalData.paymentType === 'cod') {
+        result = await api.createCodOrder({
           customer: form,
           items: payloadItems,
           couponCode: couponCode || undefined,
+          upiApp: selectedApp,
+          utrNumber: utrNumber.trim() || undefined,
         });
-        clearCart();
-        setIsProcessing(false);
-        onOrderCompleted(result.order);
-        onNavigate('order-confirmation', result.order.orderNumber);
-        return;
-      }
-
-      // B. MX Pay Gateway Flow
-      if (paymentMethod === 'mxpay') {
-        const mxInit = await api.createMxPayOrder({
+      } else {
+        result = await api.createUpiOrder({
           customer: form,
           items: payloadItems,
           couponCode: couponCode || undefined,
+          upiApp: selectedApp,
+          utrNumber: utrNumber.trim() || undefined,
         });
-        setIsProcessing(false);
-        setMxPayModalData({
-          orderId: mxInit.orderId,
-          orderNumber: mxInit.orderNumber,
-          transactionId: mxInit.mxpayTransactionId,
-          amount: mxInit.amount,
-          apiKey: mxInit.apiKey,
-          merchantId: mxInit.merchantId,
-          testMode: mxInit.testMode,
-        });
-        return;
       }
-
-    } catch (err: any) {
-      setIsProcessing(false);
-      setError(err.message || 'Failed to place order. Please check inputs and try again.');
-    }
-  };
-
-  // Handler for MX Pay payment authorization
-  const handleCompleteMxPayment = async (success: boolean) => {
-    if (!mxPayModalData) return;
-    setIsProcessing(true);
-
-    if (!success) {
-      setIsProcessing(false);
-      setMxPayModalData(null);
-      setError('MX Pay transaction was cancelled. No amount was debited.');
-      return;
-    }
-
-    try {
-      const mockPaymentId = `mx_pay_${Date.now()}_${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-      const verifyRes = await api.verifyMxPayPayment({
-        orderId: mxPayModalData.orderId,
-        mxpayPaymentId: mockPaymentId,
-        mxpayTransactionId: mxPayModalData.transactionId,
-        isTestSimulated: mxPayModalData.testMode,
-      });
 
       clearCart();
       setIsProcessing(false);
-      setMxPayModalData(null);
-      onOrderCompleted(verifyRes.order);
-      onNavigate('order-confirmation', verifyRes.order.orderNumber);
+      setUpiModalData(null);
+      onOrderCompleted(result.order);
+      onNavigate('order-confirmation', result.order.orderNumber);
     } catch (err: any) {
       setIsProcessing(false);
-      setError(err.message || 'MX Pay verification failed. Please try again.');
+      setError(err.message || 'Could not place order. Please verify details and try again.');
     }
   };
+
+  const currentAdvance = Math.min(codAdvanceAmount, total);
+  const currentBalance = Math.max(0, total - currentAdvance);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -224,21 +262,21 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       <div className="flex items-center justify-between pb-4 border-b border-[#E5E8E3]">
         <button
           onClick={() => onNavigate('shop')}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#087A42] hover:underline"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#087A42] hover:underline cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span>Continue Shopping</span>
         </button>
         <div className="flex items-center gap-1.5 text-xs text-[#5E695E]">
           <Lock className="w-3.5 h-3.5 text-[#087A42]" />
-          <span>256-bit SSL Encrypted Pan-India Checkout</span>
+          <span>Secure Direct UPI & COD Checkout</span>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
         
         {/* Left Column: Delivery Address & Payment Method */}
-        <form onSubmit={handlePlaceOrder} className="lg:col-span-7 space-y-6">
+        <form onSubmit={handleInitiateOrder} className="lg:col-span-7 space-y-6">
           
           {/* Step 1: Delivery Address */}
           <div className="bg-white rounded-3xl border border-[#E5E8E3] p-6 sm:p-8 space-y-5 shadow-xs">
@@ -249,69 +287,70 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 </span>
                 <span>Delivery Address (India)</span>
               </h2>
-              <span className="text-[11px] text-[#5E695E]">Guest checkout welcome</span>
+              <span className="text-xs text-[#087A42] font-semibold flex items-center gap-1">
+                <Truck className="w-3.5 h-3.5" />
+                <span>Pan-India Shipping</span>
+              </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
+              <div className="sm:col-span-2">
                 <label className="text-xs font-bold text-[#202720] block mb-1">
                   Full Name *
                 </label>
                 <input
                   type="text"
+                  required
                   placeholder="e.g. Rahul Sharma"
                   value={form.fullName}
                   onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-                  required
-                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:outline-none focus:border-[#087A42] focus:bg-white"
+                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
                 />
               </div>
 
               <div>
                 <label className="text-xs font-bold text-[#202720] block mb-1">
-                  Mobile Number (for delivery SMS & updates) *
+                  Mobile Number (for Courier updates) *
                 </label>
-                <div className="relative flex">
-                  <span className="inline-flex items-center px-3 text-xs font-semibold text-[#5E695E] bg-[#E5E8E3]/50 border border-r-0 border-[#E5E8E3] rounded-l-xl">
-                    +91
-                  </span>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-xs text-[#5E695E] font-medium">+91</span>
                   <input
                     type="tel"
-                    placeholder="9876543210"
+                    required
+                    placeholder="98765 43210"
                     maxLength={10}
                     value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/[^0-9]/g, '') })}
-                    required
-                    className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-r-xl focus:outline-none focus:border-[#087A42] focus:bg-white"
+                    onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })}
+                    className="w-full text-xs pl-11 pr-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none font-mono"
                   />
                 </div>
               </div>
 
-              <div className="sm:col-span-2">
+              <div>
                 <label className="text-xs font-bold text-[#202720] block mb-1">
-                  Email Address (for order invoice & tracking) *
+                  Email Address (for Receipt) *
                 </label>
                 <input
                   type="email"
+                  required
                   placeholder="rahul@example.com"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  required
-                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:outline-none focus:border-[#087A42] focus:bg-white"
+                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
                 />
               </div>
 
               <div className="sm:col-span-2">
                 <label className="text-xs font-bold text-[#202720] block mb-1">
-                  Flat, House no., Building, Street Address *
+                  Street Address / House / Flat No. *
                 </label>
                 <input
                   type="text"
-                  placeholder="Flat 402, Green Valley Apartments, 5th Cross Road"
+                  required
+                  placeholder="e.g. Flat 402, Sunshine Apartments, Main Road"
                   value={form.addressLine}
                   onChange={(e) => setForm({ ...form, addressLine: e.target.value })}
-                  required
-                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:outline-none focus:border-[#087A42] focus:bg-white"
+                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
                 />
               </div>
 
@@ -321,25 +360,25 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 </label>
                 <input
                   type="text"
-                  placeholder="Near Metro Station or Supermarket"
+                  placeholder="e.g. Near City Hospital or Metro Pillar 12"
                   value={form.landmark}
                   onChange={(e) => setForm({ ...form, landmark: e.target.value })}
-                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:outline-none focus:border-[#087A42] focus:bg-white"
+                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
                 />
               </div>
 
               <div>
                 <label className="text-xs font-bold text-[#202720] block mb-1">
-                  Indian Postal PIN Code *
+                  PIN Code *
                 </label>
                 <input
                   type="text"
-                  maxLength={6}
-                  placeholder="e.g. 560001"
-                  value={form.pincode}
-                  onChange={(e) => handlePincodeAutoFill(e.target.value.replace(/[^0-9]/g, ''))}
                   required
-                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:outline-none focus:border-[#087A42] focus:bg-white"
+                  maxLength={6}
+                  placeholder="e.g. 400001"
+                  value={form.pincode}
+                  onChange={(e) => handlePincodeAutoFill(e.target.value.replace(/\D/g, ''))}
+                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none font-mono"
                 />
               </div>
 
@@ -349,11 +388,11 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Bengaluru, Mumbai, Pune"
+                  required
+                  placeholder="e.g. Mumbai"
                   value={form.city}
                   onChange={(e) => setForm({ ...form, city: e.target.value })}
-                  required
-                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:outline-none focus:border-[#087A42] focus:bg-white"
+                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
                 />
               </div>
 
@@ -364,8 +403,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 <select
                   value={form.state}
                   onChange={(e) => setForm({ ...form, state: e.target.value })}
-                  required
-                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:outline-none focus:border-[#087A42] focus:bg-white font-medium"
+                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
                 >
                   {indianStates.map((st) => (
                     <option key={st} value={st}>
@@ -376,14 +414,14 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               </div>
             </div>
 
-            <label className="flex items-center gap-2 pt-2 cursor-pointer text-xs text-[#5E695E]">
+            <label className="flex items-center gap-2 pt-2 text-xs text-[#5E695E] cursor-pointer">
               <input
                 type="checkbox"
                 checked={saveInfo}
                 onChange={(e) => setSaveInfo(e.target.checked)}
                 className="rounded text-[#087A42] focus:ring-[#087A42]"
               />
-              <span>Save this address for fast checkout in future</span>
+              <span>Save this address for fast checkout next time</span>
             </label>
           </div>
 
@@ -398,49 +436,12 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               </h2>
               <span className="text-[11px] text-[#087A42] font-semibold flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Encrypted & Verified</span>
+                <span>Zero Gateway Fees</span>
               </span>
             </div>
 
             <div className="space-y-3">
-              {/* Option A: MX Pay Payment Gateway */}
-              {mxPayAllowed && (
-                <label
-                  className={`p-4 rounded-2xl border-2 cursor-pointer flex items-start gap-3.5 transition-all ${
-                    paymentMethod === 'mxpay'
-                      ? 'border-[#087A42] bg-[#E8F5EE]/40'
-                      : 'border-[#E5E8E3] hover:border-slate-300'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="payment"
-                    checked={paymentMethod === 'mxpay'}
-                    onChange={() => setPaymentMethod('mxpay')}
-                    className="mt-1 text-[#087A42] focus:ring-[#087A42]"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded bg-[#FF7900] text-white flex items-center justify-center font-black text-[10px]">
-                          MX
-                        </span>
-                        <p className="text-xs font-bold text-[#202720]">
-                          MX Pay Gateway (UPI, QR Code, Cards, NetBanking)
-                        </p>
-                      </div>
-                      <span className="text-[11px] font-semibold text-[#087A42] bg-white px-2 py-0.5 rounded border border-[#087A42]/30">
-                        Instant Checkout
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-[#5E695E] mt-1 leading-relaxed">
-                      Pay instantly with Google Pay, PhonePe, Paytm, BHIM UPI, debit/credit cards, or NetBanking.
-                    </p>
-                  </div>
-                </label>
-              )}
-
-              {/* Option B: Cash on Delivery (COD) */}
+              {/* Option 1: Cash on Delivery with ₹99 Advance */}
               {codAllowed && (
                 <label
                   className={`p-4 rounded-2xl border-2 cursor-pointer flex items-start gap-3.5 transition-all ${
@@ -457,11 +458,58 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                     className="mt-1 text-[#087A42] focus:ring-[#087A42]"
                   />
                   <div className="flex-1">
-                    <p className="text-xs font-bold text-[#202720]">
-                      Cash on Delivery (COD)
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded bg-[#FF7900] text-white flex items-center justify-center font-bold text-[10px]">
+                          COD
+                        </span>
+                        <p className="text-xs font-bold text-[#202720]">
+                          Cash on Delivery (₹{currentAdvance} Advance Token)
+                        </p>
+                      </div>
+                      <span className="text-[11px] font-bold text-[#FF7900] bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
+                        Pay ₹{currentAdvance} Now
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#5E695E] mt-1.5 leading-relaxed">
+                      Pay small advance ₹{currentAdvance} token via UPI or QR Code to verify your order. The remaining balance of <strong className="text-[#202720]">₹{currentBalance}</strong> is collected in cash or UPI at your doorstep upon delivery.
                     </p>
-                    <p className="text-[11px] text-[#5E695E] mt-1 leading-relaxed">
-                      Pay cash or UPI directly to the courier agent when your package arrives at your doorstep.
+                  </div>
+                </label>
+              )}
+
+              {/* Option 2: 100% Full UPI Payment */}
+              {upiAllowed && (
+                <label
+                  className={`p-4 rounded-2xl border-2 cursor-pointer flex items-start gap-3.5 transition-all ${
+                    paymentMethod === 'upi'
+                      ? 'border-[#087A42] bg-[#E8F5EE]/40'
+                      : 'border-[#E5E8E3] hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="payment"
+                    checked={paymentMethod === 'upi'}
+                    onChange={() => setPaymentMethod('upi')}
+                    className="mt-1 text-[#087A42] focus:ring-[#087A42]"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded bg-[#087A42] text-white flex items-center justify-center font-bold text-[10px]">
+                          UPI
+                        </span>
+                        <p className="text-xs font-bold text-[#202720]">
+                          Full UPI Payment (GPay, PhonePe, Paytm, QR)
+                        </p>
+                      </div>
+                      <span className="text-[11px] font-semibold text-[#087A42] bg-emerald-50 px-2 py-0.5 rounded border border-[#087A42]/30">
+                        Fastest Dispatch
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#5E695E] mt-1.5 leading-relaxed">
+                      Pay 100% full amount (₹{total}) instantly via Google Pay, PhonePe, Paytm, or UPI QR code. No cash hassle at delivery.
                     </p>
                   </div>
                 </label>
@@ -480,13 +528,13 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               disabled={isProcessing}
               className="w-full py-4 bg-[#087A42] hover:bg-[#066336] text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.99] disabled:opacity-50 cursor-pointer"
             >
-              <Lock className="w-4 h-4 text-[#FF7900]" />
+              <Smartphone className="w-4 h-4 text-emerald-200" />
               <span>
                 {isProcessing
-                  ? 'Processing Order...'
+                  ? 'Preparing Payment...'
                   : paymentMethod === 'cod'
-                  ? `Confirm Order with Cash on Delivery (₹${total})`
-                  : `Proceed to MX Pay · ₹${total}`}
+                  ? `Proceed with COD · Pay ₹${currentAdvance} Advance via UPI / QR`
+                  : `Pay Full Amount · ₹${total} via UPI / QR`}
               </span>
             </button>
           </div>
@@ -553,6 +601,19 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               <span>Total Amount</span>
               <span className="text-lg text-[#087A42] tabular-nums">₹{total}</span>
             </div>
+
+            {paymentMethod === 'cod' && (
+              <div className="p-3 bg-[#FFF4E5] rounded-xl text-[11px] text-[#202720] space-y-1 mt-2 border border-orange-200/60">
+                <div className="flex justify-between font-bold text-[#FF7900]">
+                  <span>Advance Payment (Now via UPI):</span>
+                  <span>₹{currentAdvance}</span>
+                </div>
+                <div className="flex justify-between text-[#5E695E]">
+                  <span>Payable at Doorstep (Delivery):</span>
+                  <span className="font-bold text-[#202720]">₹{currentBalance}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="p-3 bg-[#F7F8F6] rounded-xl text-[11px] text-[#5E695E] space-y-1">
@@ -566,229 +627,199 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
       </div>
 
-      {/* Test / Sandbox Gateway Simulation Modal */}
-
-
-      {/* MX Pay Payment Gateway Modal */}
-      {mxPayModalData && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-5 shadow-2xl border border-[#E5E8E3] animate-in zoom-in-95 duration-200">
+      {/* UPI Intent & QR Code Payment Modal */}
+      {upiModalData && (
+        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-7 space-y-5 shadow-2xl border border-[#E5E8E3] my-8 animate-in zoom-in-95 duration-200">
+            
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-[#E5E8E3]">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-[#FF7900] text-white flex items-center justify-center font-black text-xs shadow-xs">
-                  MX
+                <div className="w-9 h-9 rounded-xl bg-[#087A42] text-white flex items-center justify-center font-black text-xs shadow-xs">
+                  UPI
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-[#202720] flex items-center gap-1.5">
-                    <span>MX Pay Payment Gateway</span>
+                    <span>
+                      {upiModalData.paymentType === 'cod'
+                        ? 'Cash on Delivery (₹99 Advance)'
+                        : 'Full UPI Instant Payment'}
+                    </span>
                     <ShieldCheck className="w-4 h-4 text-[#087A42]" />
                   </h3>
-                  <p className="text-[10px] text-[#5E695E]">FanKO Store Verified Merchant Checkout</p>
+                  <p className="text-[11px] text-[#5E695E]">FanKO Store Direct UPI Checkout</p>
                 </div>
               </div>
+
               <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
-                mxPayModalData.testMode
-                  ? 'bg-[#FFF4E5] text-[#FF7900] border-[#FF7900]/20'
+                upiModalData.paymentType === 'cod'
+                  ? 'bg-orange-50 text-[#FF7900] border-orange-200'
                   : 'bg-emerald-50 text-[#087A42] border-[#087A42]/30'
               }`}>
-                {mxPayModalData.testMode ? 'Sandbox Mode' : 'Live Gateway'}
+                {upiModalData.paymentType === 'cod' ? 'Advance Token' : 'Full Payment'}
               </span>
             </div>
 
-            {/* Order & Gateway Details */}
-            <div className="p-3.5 bg-[#F7F8F6] rounded-2xl space-y-1.5 text-xs">
-              <div className="flex justify-between text-[#5E695E]">
-                <span>Order Reference:</span>
-                <span className="font-mono font-bold text-[#202720]">{mxPayModalData.orderNumber}</span>
+            {/* Payable Amount Highlight Card */}
+            <div className="p-4 bg-[#F7F8F6] rounded-2xl border border-[#E5E8E3] text-center space-y-1">
+              <span className="text-[11px] text-[#5E695E] font-medium">
+                {upiModalData.paymentType === 'cod' ? 'Advance Amount to Pay Now' : 'Total Amount to Pay Now'}
+              </span>
+              <div className="text-3xl font-extrabold text-[#087A42] tabular-nums">
+                ₹{upiModalData.amountToPay}
               </div>
-              <div className="flex justify-between text-[#5E695E]">
-                <span>Transaction Ref:</span>
-                <span className="font-mono text-[11px] text-[#202720]">{mxPayModalData.transactionId}</span>
-              </div>
-              <div className="flex justify-between text-[#5E695E]">
-                <span>Configured API Key:</span>
-                <span className="font-mono text-[11px] text-[#087A42] font-semibold">
-                  {mxPayModalData.apiKey && mxPayModalData.apiKey !== 'mx_key_sandbox'
-                    ? `${mxPayModalData.apiKey.slice(0, 10)}••••••••`
-                    : 'Awaiting User Key (Sandbox Active)'}
-                </span>
-              </div>
-              <div className="flex justify-between text-sm font-extrabold text-[#202720] pt-2 border-t border-[#E5E8E3]">
-                <span>Total Payable:</span>
-                <span className="text-base text-[#087A42] tabular-nums">₹{mxPayModalData.amount}</span>
-              </div>
-            </div>
-
-            {/* Payment Method Selector Tabs */}
-            <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-1.5 bg-[#F7F8F6] p-1 rounded-xl">
-                <button
-                  type="button"
-                  onClick={() => setMxPayTab('upi')}
-                  className={`py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    mxPayTab === 'upi' ? 'bg-white text-[#087A42] shadow-xs' : 'text-[#5E695E] hover:text-[#202720]'
-                  }`}
-                >
-                  <Smartphone className="w-3.5 h-3.5" />
-                  <span>UPI / QR</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMxPayTab('card')}
-                  className={`py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    mxPayTab === 'card' ? 'bg-white text-[#087A42] shadow-xs' : 'text-[#5E695E] hover:text-[#202720]'
-                  }`}
-                >
-                  <CreditCard className="w-3.5 h-3.5" />
-                  <span>Cards</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMxPayTab('netbanking')}
-                  className={`py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                    mxPayTab === 'netbanking' ? 'bg-white text-[#087A42] shadow-xs' : 'text-[#5E695E] hover:text-[#202720]'
-                  }`}
-                >
-                  <Building2 className="w-3.5 h-3.5" />
-                  <span>NetBanking</span>
-                </button>
-              </div>
-
-              {/* Tab 1: UPI & QR Code */}
-              {mxPayTab === 'upi' && (
-                <div className="space-y-3 pt-1">
-                  <div className="flex flex-col sm:flex-row items-center gap-4 p-3.5 bg-white border border-[#E5E8E3] rounded-2xl">
-                    <div className="w-24 h-24 bg-[#F7F8F6] border-2 border-dashed border-[#087A42]/40 rounded-xl flex flex-col items-center justify-center p-2 text-center shrink-0">
-                      <QrCode className="w-12 h-12 text-[#087A42]" />
-                      <span className="text-[9px] font-bold text-[#087A42] mt-0.5">Scan UPI QR</span>
-                    </div>
-                    <div className="space-y-1.5 text-center sm:text-left flex-1">
-                      <p className="text-xs font-bold text-[#202720]">Instant UPI Payment</p>
-                      <p className="text-[11px] text-[#5E695E]">
-                        Open any UPI app on your phone to scan or tap an app:
-                      </p>
-                      <div className="flex flex-wrap gap-1.5 pt-1 justify-center sm:justify-start">
-                        {(['gpay', 'phonepe', 'paytm', 'bhim'] as const).map((app) => (
-                          <button
-                            key={app}
-                            type="button"
-                            onClick={() => setSelectedUpiApp(app)}
-                            className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
-                              selectedUpiApp === app
-                                ? 'bg-[#087A42] text-white border-[#087A42]'
-                                : 'bg-[#F7F8F6] text-[#202720] border-[#E5E8E3] hover:border-slate-400'
-                            }`}
-                          >
-                            {app.toUpperCase()}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-[#202720] block mb-1">Or enter UPI ID / VPA</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. yourname@okhdfcbank or mobile@upi"
-                      value={upiVpa}
-                      onChange={(e) => setUpiVpa(e.target.value)}
-                      className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42]"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Tab 2: Credit / Debit Card */}
-              {mxPayTab === 'card' && (
-                <div className="space-y-2.5 pt-1">
-                  <div>
-                    <label className="text-xs font-bold text-[#202720] block mb-1">Card Number</label>
-                    <input
-                      type="text"
-                      placeholder="4532 •••• •••• 1042"
-                      value={cardNumber}
-                      onChange={(e) => setCardNumber(e.target.value)}
-                      maxLength={19}
-                      className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl font-mono focus:bg-white focus:border-[#087A42]"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs font-bold text-[#202720] block mb-1">Expiry (MM/YY)</label>
-                      <input
-                        type="text"
-                        placeholder="12/28"
-                        value={cardExpiry}
-                        onChange={(e) => setCardExpiry(e.target.value)}
-                        maxLength={5}
-                        className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl font-mono"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-[#202720] block mb-1">CVV</label>
-                      <input
-                        type="password"
-                        placeholder="•••"
-                        value={cardCvv}
-                        onChange={(e) => setCardCvv(e.target.value)}
-                        maxLength={4}
-                        className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl font-mono"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Tab 3: NetBanking */}
-              {mxPayTab === 'netbanking' && (
-                <div className="space-y-2.5 pt-1">
-                  <label className="text-xs font-bold text-[#202720] block mb-1">Select Bank</label>
-                  <select
-                    value={selectedBank}
-                    onChange={(e) => setSelectedBank(e.target.value)}
-                    className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl font-semibold text-[#202720]"
-                  >
-                    <option value="HDFC Bank">HDFC Bank</option>
-                    <option value="State Bank of India">State Bank of India (SBI)</option>
-                    <option value="ICICI Bank">ICICI Bank</option>
-                    <option value="Axis Bank">Axis Bank</option>
-                    <option value="Kotak Mahindra Bank">Kotak Mahindra Bank</option>
-                    <option value="Punjab National Bank">Punjab National Bank</option>
-                  </select>
-                </div>
+              {upiModalData.paymentType === 'cod' ? (
+                <p className="text-[11px] text-[#5E695E] pt-1">
+                  Remaining <strong className="text-[#202720]">₹{upiModalData.balanceOnDelivery}</strong> will be collected at your doorstep in cash/UPI.
+                </p>
+              ) : (
+                <p className="text-[11px] text-[#087A42] font-semibold pt-1">
+                  ₹0 to pay on delivery · 100% cleared
+                </p>
               )}
             </div>
 
-            {/* Actions */}
-            <div className="space-y-2 pt-2">
+            {/* Direct App Launchers: Automatically open GPay, PhonePe, Paytm */}
+            <div className="space-y-2.5">
+              <label className="text-xs font-bold text-[#202720] block">
+                Tap to Automatically Open UPI App on Your Phone:
+              </label>
+
+              <div className="grid grid-cols-3 gap-2">
+                {/* Google Pay */}
+                <button
+                  type="button"
+                  onClick={() => handleLaunchUpiApp('gpay')}
+                  className="p-2.5 bg-white hover:bg-slate-50 border-2 border-slate-200 hover:border-[#087A42] rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95"
+                >
+                  <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center font-black text-xs text-blue-600">
+                    G
+                  </div>
+                  <span className="text-[11px] font-bold text-[#202720]">GPay</span>
+                </button>
+
+                {/* PhonePe */}
+                <button
+                  type="button"
+                  onClick={() => handleLaunchUpiApp('phonepe')}
+                  className="p-2.5 bg-white hover:bg-slate-50 border-2 border-slate-200 hover:border-[#5f259f] rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95"
+                >
+                  <div className="w-7 h-7 rounded-full bg-[#5f259f]/10 flex items-center justify-center font-black text-xs text-[#5f259f]">
+                    Pe
+                  </div>
+                  <span className="text-[11px] font-bold text-[#202720]">PhonePe</span>
+                </button>
+
+                {/* Paytm */}
+                <button
+                  type="button"
+                  onClick={() => handleLaunchUpiApp('paytm')}
+                  className="p-2.5 bg-white hover:bg-slate-50 border-2 border-slate-200 hover:border-[#00baf2] rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95"
+                >
+                  <div className="w-7 h-7 rounded-full bg-[#00baf2]/10 flex items-center justify-center font-black text-xs text-[#002970]">
+                    P
+                  </div>
+                  <span className="text-[11px] font-bold text-[#202720]">Paytm</span>
+                </button>
+              </div>
+
+              {/* Any other UPI App */}
               <button
                 type="button"
-                onClick={() => handleCompleteMxPayment(true)}
+                onClick={() => handleLaunchUpiApp('other')}
+                className="w-full py-2 bg-[#F7F8F6] hover:bg-[#E5E8E3] text-[#202720] text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-[#087A42]" />
+                <span>Open Any Other UPI App (BHIM, CRED, Navi)</span>
+              </button>
+            </div>
+
+            {/* QR Code Section (for Desktop or Scanning) */}
+            <div className="p-3.5 bg-white border border-[#E5E8E3] rounded-2xl flex flex-col sm:flex-row items-center gap-4">
+              <div className="w-28 h-28 bg-[#F7F8F6] p-1.5 rounded-xl border border-slate-200 flex items-center justify-center shrink-0">
+                <img
+                  src={upiModalData.qrCodeUrl}
+                  alt="UPI QR Code"
+                  className="w-full h-full object-contain"
+                />
+              </div>
+
+              <div className="space-y-1.5 text-center sm:text-left flex-1 min-w-0">
+                <p className="text-xs font-bold text-[#202720] flex items-center justify-center sm:justify-start gap-1">
+                  <QrCode className="w-3.5 h-3.5 text-[#087A42]" />
+                  <span>Scan QR with Any App</span>
+                </p>
+                <p className="text-[11px] text-[#5E695E]">
+                  Scan with GPay, PhonePe, Paytm, or BHIM scanner.
+                </p>
+
+                {/* Copy UPI ID */}
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={handleCopyUpiId}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold bg-[#F7F8F6] hover:bg-[#E5E8E3] text-[#202720] px-2.5 py-1 rounded-lg border border-[#E5E8E3] transition-colors cursor-pointer"
+                  >
+                    {copiedUpi ? (
+                      <>
+                        <Check className="w-3 h-3 text-[#087A42]" />
+                        <span className="text-[#087A42]">UPI ID Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3 text-[#5E695E]" />
+                        <span className="truncate">{upiModalData.upiId}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* UTR / Ref Number & Confirmation */}
+            <div className="space-y-3 pt-1 border-t border-[#E5E8E3]">
+              <div>
+                <label className="text-xs font-bold text-[#202720] block mb-1">
+                  UPI 12-digit UTR / Reference No. (Optional):
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. 439281928412 or last 4 digits from UPI app"
+                  value={utrNumber}
+                  onChange={(e) => setUtrNumber(e.target.value)}
+                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl font-mono focus:bg-white focus:border-[#087A42] focus:outline-none"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleConfirmOrderPlacement}
                 disabled={isProcessing}
-                className="w-full py-3.5 bg-[#087A42] hover:bg-[#066336] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"
+                className="w-full py-4 bg-[#087A42] hover:bg-[#066336] text-white text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.99] cursor-pointer disabled:opacity-50"
               >
                 <CheckCircle2 className="w-4 h-4 text-emerald-200" />
                 <span>
-                  {isProcessing ? 'Verifying with MX Pay...' : `Authorize & Pay ₹${mxPayModalData.amount} via MX Pay`}
+                  {isProcessing
+                    ? 'Confirming Order...'
+                    : `I Have Paid ₹${upiModalData.amountToPay} — Confirm Order`}
                 </span>
               </button>
 
               <button
                 type="button"
-                onClick={() => handleCompleteMxPayment(false)}
+                onClick={() => setUpiModalData(null)}
                 disabled={isProcessing}
-                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                className="w-full py-2 text-xs font-semibold text-[#5E695E] hover:text-[#202720] transition-colors cursor-pointer text-center"
               >
-                Cancel / Return to Cart
+                Change Payment Method / Back
               </button>
             </div>
 
-            <p className="text-[10px] text-center text-slate-400 flex items-center justify-center gap-1 pt-1">
+            <p className="text-[10px] text-center text-slate-400 flex items-center justify-center gap-1">
               <Lock className="w-3 h-3 text-[#087A42]" />
-              <span>256-Bit Bank Grade SSL Encrypted Checkout via MX Pay</span>
+              <span>Direct Bank to Bank UPI Payment · 100% Safe</span>
             </p>
+
           </div>
         </div>
       )}

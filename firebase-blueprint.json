@@ -51,7 +51,7 @@
     },
     "StoreSettings": {
       "title": "StoreSettings",
-      "description": "Global store configuration and payment gateway parameters",
+      "description": "Global store configuration and payment parameters",
       "type": "object",
       "properties": {
         "storeName": { "type": "string" },
@@ -59,10 +59,11 @@
         "announcementText": { "type": "string" },
         "supportEmail": { "type": "string" },
         "supportPhone": { "type": "string" },
-        "mxPayEnabled": { "type": "boolean" },
-        "mxPayApiKey": { "type": "string" },
-        "mxPayMerchantId": { "type": "string" },
-        "mxPayMode": { "type": "string" }
+        "codEnabled": { "type": "boolean" },
+        "codAdvanceAmount": { "type": "number" },
+        "upiEnabled": { "type": "boolean" },
+        "upiId": { "type": "string" },
+        "upiPayeeName": { "type": "string" }
       }
     }
   },

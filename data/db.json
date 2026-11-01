@@ -11,7 +11,7 @@
       "description": "Bring structured calm to your dressing table or bathroom counter with this fluted vanity organizer. Designed with multiple stepped compartments to hold makeup brushes, skin serums, eyeliners, and grooming accessories upright and within arm’s reach. Sturdy footed design keeps the base elevated off wet surfaces.",
       "price": 699,
       "salePrice": 499,
-      "stock": 42,
+      "stock": 41,
       "status": "in_stock",
       "images": [
         "/assets/aistudio/Ribbed_White_Vanity_Organizer_0347519c.png"
@@ -228,7 +228,7 @@
       "description": "Upgrade your daily cooking experience with this premium borosilicate glass oil dispenser. The lid opens automatically when tilted and seals shut when set upright, eliminating messy oily caps. Wide neck makes refilling quick without funnels, and the ergonomic handle ensures a steady, comfortable grip.",
       "price": 749,
       "salePrice": 529,
-      "stock": 50,
+      "stock": 49,
       "status": "in_stock",
       "images": [
         "/assets/aistudio/WhatsApp_Image_2026-09-13_at_7.38.0_7cad6069.jpeg"
@@ -408,6 +408,112 @@
     }
   ],
   "orders": [
+    {
+      "id": "ord-1793526108600",
+      "orderNumber": "FKO-2026-6733",
+      "customer": {
+        "fullName": "Priya Nair",
+        "phone": "9876543211",
+        "email": "priya@example.com",
+        "addressLine": "12 Residency Road",
+        "city": "Bengaluru",
+        "state": "Karnataka",
+        "pincode": "560025"
+      },
+      "items": [
+        {
+          "productId": "prod-007",
+          "name": "FanKO Precision Pour Glass Oil & Vinegar Dispenser Jug (600ml)",
+          "sku": "FKO-KIT-007",
+          "price": 529,
+          "quantity": 1,
+          "image": "/assets/aistudio/WhatsApp_Image_2026-09-13_at_7.38.0_7cad6069.jpeg",
+          "subtotal": 529
+        }
+      ],
+      "subtotal": 529,
+      "discount": 0,
+      "shippingFee": 0,
+      "total": 529,
+      "paymentMethod": "upi",
+      "paymentStatus": "paid",
+      "fulfillmentStatus": "confirmed",
+      "paymentDetails": {
+        "mode": "upi",
+        "upiApp": "phonepe",
+        "upiTransactionId": "UPI_1793526108600_36S0O6",
+        "utrNumber": "439198765432",
+        "upiId": "fankostore@okhdfcbank",
+        "advancePaid": 529,
+        "balanceDueOnDelivery": 0,
+        "paidAt": "2026-11-01T09:41:48.600Z"
+      },
+      "shippingDetails": {
+        "estimatedDelivery": "3-5 business days"
+      },
+      "statusHistory": [
+        {
+          "status": "confirmed",
+          "note": "Order placed with 100% Full UPI Payment via PHONEPE (Amount: ₹529, UTR/Ref: 439198765432). Payment verified.",
+          "timestamp": "2026-11-01T09:41:48.600Z"
+        }
+      ],
+      "createdAt": "2026-11-01T09:41:48.600Z",
+      "updatedAt": "2026-11-01T09:41:48.600Z"
+    },
+    {
+      "id": "ord-1793526103503",
+      "orderNumber": "FKO-2026-8509",
+      "customer": {
+        "fullName": "Aarav Mehta",
+        "phone": "9876543210",
+        "email": "aarav@example.com",
+        "addressLine": "401 Palm Grove, Marine Drive",
+        "city": "Mumbai",
+        "state": "Maharashtra",
+        "pincode": "400020"
+      },
+      "items": [
+        {
+          "productId": "prod-001",
+          "name": "FanKO Ribbed Multi-Slot Vanity & Countertop Organizer",
+          "sku": "FKO-ORG-001",
+          "price": 499,
+          "quantity": 1,
+          "image": "/assets/aistudio/Ribbed_White_Vanity_Organizer_0347519c.png",
+          "subtotal": 499
+        }
+      ],
+      "subtotal": 499,
+      "discount": 0,
+      "shippingFee": 0,
+      "total": 499,
+      "paymentMethod": "cod",
+      "paymentStatus": "advance_paid",
+      "fulfillmentStatus": "confirmed",
+      "paymentDetails": {
+        "mode": "cod",
+        "advancePaid": 99,
+        "balanceDueOnDelivery": 400,
+        "upiApp": "gpay",
+        "upiTransactionId": "COD_ADV_1793526103503_SCRD1A",
+        "utrNumber": "439120938472",
+        "upiId": "fankostore@okhdfcbank",
+        "paidAt": "2026-11-01T09:41:43.503Z"
+      },
+      "shippingDetails": {
+        "estimatedDelivery": "3-5 business days"
+      },
+      "statusHistory": [
+        {
+          "status": "confirmed",
+          "note": "Order confirmed with Cash on Delivery (COD). ₹99 advance payment verified via GPAY (UTR: 439120938472). Balance ₹400 will be collected in cash or UPI upon doorstep delivery.",
+          "timestamp": "2026-11-01T09:41:43.503Z"
+        }
+      ],
+      "createdAt": "2026-11-01T09:41:43.503Z",
+      "updatedAt": "2026-11-01T09:41:43.503Z"
+    },
     {
       "id": "ord-1793523397773",
       "orderNumber": "FKO-2026-9553",
@@ -698,10 +804,10 @@
     "freeShippingThreshold": 499,
     "standardShippingFee": 49,
     "codEnabled": true,
-    "mxPayEnabled": true,
-    "mxPayApiKey": "76D73A7E-B18F8999-9409FA32-A23F5F04-E2DB1357-1262E2D8",
-    "mxPayMerchantId": "FANKO_STORE",
-    "mxPayTestMode": false,
+    "codAdvanceAmount": 99,
+    "upiEnabled": true,
+    "upiId": "fankostore@okhdfcbank",
+    "upiPayeeName": "FanKO Store",
     "currency": "INR"
   },
   "adminUsers": [],

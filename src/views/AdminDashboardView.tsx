@@ -19,7 +19,8 @@ import {
   IndianRupee,
   Layers,
   CreditCard,
-  Database
+  Database,
+  Smartphone
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { api } from '../services/api.ts';
@@ -892,114 +893,115 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
               </div>
             </div>
 
-            {/* MX Pay Payment Gateway Section */}
+            {/* Direct UPI Payments Section */}
             <div className="pt-5 border-t border-[#E5E8E3] space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-xs font-bold text-[#202720] flex items-center gap-1.5">
-                    <CreditCard className="w-4 h-4 text-[#FF7900]" />
-                    <span>MX Pay Payment Gateway</span>
+                    <Smartphone className="w-4 h-4 text-[#087A42]" />
+                    <span>Direct UPI Payment Configuration (GPay, PhonePe, Paytm, QR)</span>
                   </h3>
                   <p className="text-[11px] text-[#5E695E]">
-                    Connect your MX Pay merchant account for UPI, QR code, debit/credit cards, and net banking.
+                    Collect payments directly into your bank account via standard NPCI UPI with zero gateway fees.
                   </p>
                 </div>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                  settingsForm.mxPayApiKey
-                    ? 'bg-emerald-50 text-[#087A42] border-[#087A42]/30'
-                    : 'bg-[#FFF4E5] text-[#FF7900] border-[#FF7900]/20'
-                }`}>
-                  {settingsForm.mxPayApiKey ? 'Live Gateway Key Set' : 'Awaiting API Key'}
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-emerald-50 text-[#087A42] border-[#087A42]/30">
+                  Direct UPI Active
                 </span>
               </div>
 
               <div className="space-y-3">
-                <div>
-                  <label className="text-xs font-bold text-[#202720] block mb-1">
-                    MX Pay API Key *
-                  </label>
-                  <div className="relative">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-[#202720] block mb-1">
+                      Store UPI ID / VPA *
+                    </label>
                     <input
-                      type={showMxKey ? 'text' : 'password'}
-                      placeholder="Paste your MX Pay API Key (e.g. mx_live_key_... or mx_test_...)"
-                      value={settingsForm.mxPayApiKey || ''}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, mxPayApiKey: e.target.value })}
-                      className="w-full text-xs px-3.5 py-2.5 pr-14 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl font-mono focus:bg-white focus:border-[#087A42]"
+                      type="text"
+                      placeholder="e.g. fankostore@okhdfcbank"
+                      value={settingsForm.upiId || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, upiId: e.target.value })}
+                      className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl font-mono focus:bg-white focus:border-[#087A42]"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowMxKey(!showMxKey)}
-                      className="absolute right-3 top-2 text-[11px] font-semibold text-slate-500 hover:text-slate-800 bg-white px-1.5 py-0.5 rounded border border-slate-200"
-                    >
-                      {showMxKey ? 'Hide' : 'Show'}
-                    </button>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Receiving UPI ID for GPay, PhonePe, Paytm, and dynamic QR generation.
+                    </p>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    This key will be saved to Firebase Firestore and used for authenticating MX Pay orders.
-                  </p>
+
+                  <div>
+                    <label className="text-xs font-bold text-[#202720] block mb-1">
+                      Payee Display Name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. FanKO Store"
+                      value={settingsForm.upiPayeeName || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, upiPayeeName: e.target.value })}
+                      className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42]"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Name shown to buyers inside Google Pay, PhonePe, and Paytm.
+                    </p>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="text-xs font-bold text-[#202720] block mb-1">
-                    MX Pay Merchant ID / Store ID (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. MX_MERCHANT_FANKO"
-                    value={settingsForm.mxPayMerchantId || ''}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, mxPayMerchantId: e.target.value })}
-                    className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl font-mono"
-                  />
-                </div>
-
-                <div className="flex flex-wrap items-center gap-6 pt-1">
+                <div className="pt-1">
                   <label className="flex items-center gap-2 text-xs text-[#202720] cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={settingsForm.mxPayEnabled ?? true}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, mxPayEnabled: e.target.checked })}
+                      checked={settingsForm.upiEnabled ?? true}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, upiEnabled: e.target.checked })}
                       className="rounded text-[#087A42] focus:ring-[#087A42]"
                     />
-                    <span className="font-semibold">Enable MX Pay at Customer Checkout</span>
-                  </label>
-
-                  <label className="flex items-center gap-2 text-xs text-[#5E695E] cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={settingsForm.mxPayTestMode ?? true}
-                      onChange={(e) => setSettingsForm({ ...settingsForm, mxPayTestMode: e.target.checked })}
-                      className="rounded text-[#FF7900] focus:ring-[#FF7900]"
-                    />
-                    <span>Test Sandbox Mode (Simulate without debiting real bank accounts)</span>
+                    <span className="font-semibold">Enable 100% Full UPI Payment option at checkout</span>
                   </label>
                 </div>
               </div>
             </div>
 
-            {/* Cash on Delivery (COD) Section */}
+            {/* Cash on Delivery (COD) with Advance Token Section */}
             <div className="pt-4 border-t border-[#E5E8E3] space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-xs font-bold text-[#202720] flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-[#087A42]" />
-                    <span>Cash on Delivery (COD)</span>
+                    <ShieldCheck className="w-4 h-4 text-[#FF7900]" />
+                    <span>Cash on Delivery (COD) & Advance Verification</span>
                   </h3>
                   <p className="text-[11px] text-[#5E695E]">
-                    Allow customers across India to pay cash at their doorstep upon package delivery.
+                    Require buyers to pay a small advance token via UPI or QR code to confirm their order and prevent fake bookings.
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 pt-2">
-                <label className="flex items-center gap-2 text-xs text-[#202720] cursor-pointer">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="text-xs font-bold text-[#202720] block mb-1">
+                    Advance Token for COD (₹) *
+                  </label>
                   <input
-                    type="checkbox"
-                    checked={settingsForm.codEnabled ?? true}
-                    onChange={(e) => setSettingsForm({ ...settingsForm, codEnabled: e.target.checked })}
-                    className="rounded text-[#087A42] focus:ring-[#087A42]"
+                    type="number"
+                    min="1"
+                    placeholder="99"
+                    value={settingsForm.codAdvanceAmount ?? 99}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, codAdvanceAmount: Number(e.target.value) })}
+                    className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl font-mono focus:bg-white focus:border-[#087A42]"
                   />
-                  <span>Enable Cash on Delivery (COD)</span>
-                </label>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Buyer pays this amount via UPI/QR to confirm order; balance is collected at doorstep.
+                  </p>
+                </div>
+
+                <div className="flex items-center pt-5">
+                  <label className="flex items-center gap-2 text-xs text-[#202720] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settingsForm.codEnabled ?? true}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, codEnabled: e.target.checked })}
+                      className="rounded text-[#087A42] focus:ring-[#087A42]"
+                    />
+                    <span className="font-semibold">Enable Cash on Delivery (COD) Checkout</span>
+                  </label>
+                </div>
               </div>
             </div>
 

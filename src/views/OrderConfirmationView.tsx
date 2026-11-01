@@ -136,30 +136,65 @@ export const OrderConfirmationView: React.FC<OrderConfirmationViewProps> = ({
         <div className="bg-white rounded-3xl border border-[#E5E8E3] p-6 space-y-3 shadow-xs">
           <h3 className="text-xs font-bold text-[#202720] uppercase tracking-wider flex items-center gap-2 pb-2 border-b border-[#E5E8E3]">
             <ShieldCheck className="w-4 h-4 text-[#FF7900]" />
-            <span>Payment & Shipping</span>
+            <span>Payment & Delivery Breakdown</span>
           </h3>
           <div className="text-xs text-[#5E695E] space-y-2">
             <div className="flex justify-between">
               <span>Payment Mode:</span>
-              <strong className="text-[#202720] uppercase font-semibold">
-                {order.paymentMethod === 'cod' ? 'Cash on Delivery (COD)' : 'Razorpay Online'}
+              <strong className="text-[#202720] font-semibold">
+                {order.paymentMethod === 'cod'
+                  ? 'Cash on Delivery (COD)'
+                  : 'Full UPI Instant Payment'}
               </strong>
             </div>
-            <div className="flex justify-between">
-              <span>Payment Status:</span>
-              <span className={`font-bold capitalize ${order.paymentStatus === 'paid' ? 'text-[#087A42]' : 'text-[#FF7900]'}`}>
-                {order.paymentStatus}
-              </span>
-            </div>
-            {order.paymentDetails?.razorpayPaymentId && (
-              <div className="flex justify-between">
-                <span>Payment ID:</span>
-                <span className="font-mono text-[11px] text-[#202720]">{order.paymentDetails.razorpayPaymentId}</span>
+
+            {order.paymentMethod === 'cod' ? (
+              <>
+                <div className="flex justify-between text-[#087A42]">
+                  <span>Advance Token Paid (UPI):</span>
+                  <strong className="font-bold">₹{order.paymentDetails?.advancePaid ?? 99}</strong>
+                </div>
+                <div className="flex justify-between text-[#202720] bg-[#FFF4E5] p-2 rounded-xl border border-orange-200">
+                  <span className="font-semibold text-[#FF7900]">Collect at Doorstep:</span>
+                  <strong className="font-bold text-[#FF7900] tabular-nums">
+                    ₹{order.paymentDetails?.balanceDueOnDelivery ?? Math.max(0, order.total - 99)}
+                  </strong>
+                </div>
+              </>
+            ) : (
+              <div className="flex justify-between text-[#087A42]">
+                <span>Total Amount Paid (UPI):</span>
+                <strong className="font-bold">₹{order.total} (Fully Paid)</strong>
               </div>
             )}
+
+            {order.paymentDetails?.utrNumber && (
+              <div className="flex justify-between">
+                <span>UPI Ref / UTR:</span>
+                <span className="font-mono text-[11px] text-[#202720]">{order.paymentDetails.utrNumber}</span>
+              </div>
+            )}
+
             <div className="flex justify-between pt-1 border-t border-[#E5E8E3]">
               <span>Estimated Delivery:</span>
               <strong className="text-[#202720]">{order.shippingDetails?.estimatedDelivery || '3-5 business days'}</strong>
+            </div>
+
+            <div className="pt-2">
+              <a
+                href={`https://wa.me/919876543210?text=${encodeURIComponent(
+                  `Hi FanKO Store, I have placed order #${order.orderNumber} for ₹${order.total} (${
+                    order.paymentMethod === 'cod'
+                      ? `COD with ₹${order.paymentDetails?.advancePaid || 99} Advance Paid`
+                      : 'Full UPI Paid'
+                  }). Please confirm dispatch!`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2.5 px-3 bg-[#E8F5EE] hover:bg-[#d5eee0] text-[#087A42] font-bold text-xs rounded-xl flex items-center justify-center gap-2 border border-[#087A42]/30 transition-colors"
+              >
+                <span>Share Order Confirmation on WhatsApp</span>
+              </a>
             </div>
           </div>
         </div>

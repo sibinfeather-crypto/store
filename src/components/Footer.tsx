@@ -34,7 +34,7 @@ export const Footer: React.FC<FooterProps> = ({
             </div>
             <div>
               <p className="font-semibold text-xs text-[#202720]">Secure Payment</p>
-              <p className="text-[11px] text-[#5E695E]">MX Pay & UPI Protected</p>
+              <p className="text-[11px] text-[#5E695E]">Direct UPI & COD Verified</p>
             </div>
           </div>
 
@@ -245,13 +245,13 @@ export const Footer: React.FC<FooterProps> = ({
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#5E695E]">
           <p>© {new Date().getFullYear()} FanKO Store. All rights reserved. Smart Products. Better Living.</p>
           
-          <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] font-medium text-slate-500">
             <span>Accepted Payments:</span>
-            <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-semibold">MX Pay</span>
-            <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-semibold">UPI</span>
-            <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-semibold">Cards</span>
-            <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-semibold">NetBanking</span>
-            <span className="px-2 py-0.5 bg-slate-100 rounded text-[#087A42] font-semibold">COD</span>
+            <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-semibold">Google Pay</span>
+            <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-semibold">PhonePe</span>
+            <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-semibold">Paytm</span>
+            <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-semibold">UPI QR</span>
+            <span className="px-2 py-0.5 bg-emerald-50 text-[#087A42] rounded font-semibold border border-[#087A42]/20">COD (₹99 Advance)</span>
           </div>
         </div>
       </div>

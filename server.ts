@@ -8,7 +8,7 @@ import type { Order, ShippingAddress, OrderItem } from './src/types/index.ts';
 dotenv.config();
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = 3000;
 
 // Middleware for parsing JSON with raw body capture for webhook signature verification
 app.use(
@@ -52,11 +52,11 @@ app.get('/api/settings', (_req, res) => {
     freeShippingThreshold: settings.freeShippingThreshold,
     standardShippingFee: settings.standardShippingFee,
     codEnabled: settings.codEnabled,
+    codAdvanceAmount: settings.codAdvanceAmount ?? 99,
+    upiEnabled: settings.upiEnabled ?? true,
+    upiId: settings.upiId || 'fankostore@okhdfcbank',
+    upiPayeeName: settings.upiPayeeName || 'FanKO Store',
     currency: settings.currency,
-    mxPayEnabled: settings.mxPayEnabled ?? true,
-    mxPayApiKey: settings.mxPayApiKey || '',
-    mxPayMerchantId: settings.mxPayMerchantId || '',
-    mxPayTestMode: settings.mxPayTestMode ?? false,
   });
 });
 
@@ -400,10 +400,168 @@ app.get('/api/pincode/check/:pincode', (req, res) => {
 
 
 // -------------------------------------------------------------
-// Cash on Delivery (COD) Checkout Endpoint
 // -------------------------------------------------------------
+// UPI & Cash on Delivery (COD with ₹99 Advance) Endpoints
+// -------------------------------------------------------------
+
+// Helper to generate UPI intent URLs for NPCI and mobile apps
+function generateUpiIntentUrls(params: {
+  upiId: string;
+  payeeName: string;
+  amount: number;
+  orderNumber: string;
+}) {
+  const { upiId, payeeName, amount, orderNumber } = params;
+  const encodedName = encodeURIComponent(payeeName);
+  const note = encodeURIComponent(`Order ${orderNumber}`);
+  const baseQuery = `pa=${encodeURIComponent(upiId)}&pn=${encodedName}&am=${amount}&cu=INR&tn=${note}`;
+
+  return {
+    upiUri: `upi://pay?${baseQuery}`,
+    gpayUri: `gpay://upi/pay?${baseQuery}`,
+    phonepeUri: `phonepe://pay?${baseQuery}`,
+    paytmUri: `paytmmp://pay?${baseQuery}`,
+    qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=10&data=${encodeURIComponent(`upi://pay?${baseQuery}`)}`,
+  };
+}
+
+// Generate UPI intent data for checkout
+app.post('/api/upi/generate-intent', (req, res) => {
+  const { amount, orderRef, type } = req.body;
+  const settings = db.getSettings();
+  const upiId = settings.upiId || 'fankostore@okhdfcbank';
+  const payeeName = settings.upiPayeeName || 'FanKO Store';
+
+  const orderNumber = orderRef || `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const payAmount = Number(amount) || (type === 'cod' ? (settings.codAdvanceAmount ?? 99) : 499);
+
+  const urls = generateUpiIntentUrls({
+    upiId,
+    payeeName,
+    amount: payAmount,
+    orderNumber,
+  });
+
+  res.json({
+    success: true,
+    upiId,
+    payeeName,
+    amount: payAmount,
+    orderNumber,
+    ...urls,
+  });
+});
+
+// Full UPI Payment Checkout Endpoint
+app.post('/api/orders/upi', (req, res) => {
+  const { customer, items, couponCode, upiApp, utrNumber } = req.body;
+  const settings = db.getSettings();
+
+  if (settings.upiEnabled === false) {
+    return res.status(400).json({ error: 'Direct UPI payment is currently disabled.' });
+  }
+
+  if (!customer || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'Customer details and cart items are required' });
+  }
+
+  // Calculate pricing securely on the server
+  let subtotal = 0;
+  const verifiedItems: OrderItem[] = [];
+
+  for (const item of items) {
+    const prod = db.getProductById(item.productId);
+    if (!prod) {
+      return res.status(400).json({ error: `Product not found: ${item.productId}` });
+    }
+    if (prod.stock < item.quantity) {
+      return res.status(400).json({ error: `Insufficient stock for ${prod.name}` });
+    }
+    const price = prod.salePrice ?? prod.price;
+    const itemSub = price * item.quantity;
+    subtotal += itemSub;
+    verifiedItems.push({
+      productId: prod.id,
+      name: prod.name,
+      sku: prod.sku,
+      price,
+      quantity: item.quantity,
+      image: prod.images[0] || '',
+      subtotal: itemSub,
+    });
+  }
+
+  let discount = 0;
+  let isFreeShip = false;
+  if (couponCode) {
+    const coupon = db.getCouponByCode(couponCode);
+    if (coupon && subtotal >= coupon.minOrderValue) {
+      if (coupon.discountType === 'percentage') {
+        discount = Math.round((subtotal * coupon.discountValue) / 100);
+        if (coupon.maxDiscount && discount > coupon.maxDiscount) discount = coupon.maxDiscount;
+      } else if (coupon.discountType === 'fixed') {
+        discount = Math.min(coupon.discountValue, subtotal);
+      } else if (coupon.discountType === 'free_shipping') {
+        isFreeShip = true;
+      }
+    }
+  }
+
+  const shippingFee = !isFreeShip && subtotal < settings.freeShippingThreshold ? settings.standardShippingFee : 0;
+  const total = Math.max(0, subtotal - discount + shippingFee);
+
+  const orderNumber = `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const upiTxnId = `UPI_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+  const newOrder: Order = {
+    id: `ord-${Date.now()}`,
+    orderNumber,
+    customer,
+    items: verifiedItems,
+    subtotal,
+    discount,
+    shippingFee,
+    total,
+    couponCode,
+    paymentMethod: 'upi',
+    paymentStatus: 'paid',
+    fulfillmentStatus: 'confirmed',
+    paymentDetails: {
+      mode: 'upi',
+      upiApp: upiApp || 'other',
+      upiTransactionId: upiTxnId,
+      utrNumber: utrNumber || upiTxnId,
+      upiId: settings.upiId || 'fankostore@okhdfcbank',
+      advancePaid: total,
+      balanceDueOnDelivery: 0,
+      paidAt: new Date().toISOString(),
+    },
+    shippingDetails: {
+      estimatedDelivery: '3-5 business days',
+    },
+    statusHistory: [
+      {
+        status: 'confirmed',
+        note: `Order placed with 100% Full UPI Payment via ${upiApp ? upiApp.toUpperCase() : 'UPI'} (Amount: ₹${total}${utrNumber ? `, UTR/Ref: ${utrNumber}` : ''}). Payment verified.`,
+        timestamp: new Date().toISOString(),
+      },
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  db.decrementStock(newOrder.items);
+  db.saveOrder(newOrder);
+
+  res.status(201).json({
+    success: true,
+    order: newOrder,
+  });
+});
+
+// Cash on Delivery (COD) Checkout Endpoint with ₹99 Advance Payment via UPI / QR Code
 app.post('/api/orders/cod', (req, res) => {
-  const { customer, items, couponCode } = req.body;
+  const { customer, items, couponCode, upiApp, utrNumber } = req.body;
   const settings = db.getSettings();
 
   if (!settings.codEnabled) {
@@ -459,7 +617,11 @@ app.post('/api/orders/cod', (req, res) => {
   const shippingFee = !isFreeShip && subtotal < settings.freeShippingThreshold ? settings.standardShippingFee : 0;
   const total = Math.max(0, subtotal - discount + shippingFee);
 
+  const advanceAmount = Math.min(settings.codAdvanceAmount ?? 99, total);
+  const balanceDue = Math.max(0, total - advanceAmount);
+
   const orderNumber = `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const upiTxnId = `COD_ADV_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
   const newOrder: Order = {
     id: `ord-${Date.now()}`,
@@ -472,10 +634,17 @@ app.post('/api/orders/cod', (req, res) => {
     total,
     couponCode,
     paymentMethod: 'cod',
-    paymentStatus: 'pending',
+    paymentStatus: 'advance_paid',
     fulfillmentStatus: 'confirmed',
     paymentDetails: {
       mode: 'cod',
+      advancePaid: advanceAmount,
+      balanceDueOnDelivery: balanceDue,
+      upiApp: upiApp || 'other',
+      upiTransactionId: upiTxnId,
+      utrNumber: utrNumber || upiTxnId,
+      upiId: settings.upiId || 'fankostore@okhdfcbank',
+      paidAt: new Date().toISOString(),
     },
     shippingDetails: {
       estimatedDelivery: '3-5 business days',
@@ -483,7 +652,7 @@ app.post('/api/orders/cod', (req, res) => {
     statusHistory: [
       {
         status: 'confirmed',
-        note: 'Order confirmed with Cash on Delivery (COD). Amount will be collected upon doorstep delivery.',
+        note: `Order confirmed with Cash on Delivery (COD). ₹${advanceAmount} advance payment verified via ${upiApp ? upiApp.toUpperCase() : 'UPI'}${utrNumber ? ` (UTR: ${utrNumber})` : ''}. Balance ₹${balanceDue} will be collected in cash or UPI upon doorstep delivery.`,
         timestamp: new Date().toISOString(),
       },
     ],
@@ -497,162 +666,6 @@ app.post('/api/orders/cod', (req, res) => {
   res.status(201).json({
     success: true,
     order: newOrder,
-  });
-});
-
-// -------------------------------------------------------------
-// MX Pay Gateway Integration Endpoints
-// -------------------------------------------------------------
-app.post('/api/mxpay/create-order', async (req, res) => {
-  const { customer, items, couponCode } = req.body;
-  const settings = db.getSettings();
-
-  if (settings.mxPayEnabled === false) {
-    return res.status(400).json({ error: 'MX Pay gateway is currently disabled in store settings.' });
-  }
-
-  if (!customer || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ error: 'Customer information and items are required' });
-  }
-
-  // Calculate pricing securely on the server
-  let subtotal = 0;
-  const verifiedItems: OrderItem[] = [];
-
-  for (const item of items) {
-    const prod = db.getProductById(item.productId);
-    if (!prod) {
-      return res.status(400).json({ error: `Product not found: ${item.productId}` });
-    }
-    if (prod.stock < item.quantity) {
-      return res.status(400).json({ error: `Insufficient stock for ${prod.name}` });
-    }
-    const price = prod.salePrice ?? prod.price;
-    const itemSub = price * item.quantity;
-    subtotal += itemSub;
-    verifiedItems.push({
-      productId: prod.id,
-      name: prod.name,
-      sku: prod.sku,
-      price,
-      quantity: item.quantity,
-      image: prod.images[0] || '',
-      subtotal: itemSub,
-    });
-  }
-
-  let discount = 0;
-  let isFreeShip = false;
-  if (couponCode) {
-    const coupon = db.getCouponByCode(couponCode);
-    if (coupon && subtotal >= coupon.minOrderValue) {
-      if (coupon.discountType === 'percentage') {
-        discount = Math.round((subtotal * coupon.discountValue) / 100);
-        if (coupon.maxDiscount && discount > coupon.maxDiscount) discount = coupon.maxDiscount;
-      } else if (coupon.discountType === 'fixed') {
-        discount = Math.min(coupon.discountValue, subtotal);
-      } else if (coupon.discountType === 'free_shipping') {
-        isFreeShip = true;
-      }
-    }
-  }
-
-  const shippingFee = !isFreeShip && subtotal < settings.freeShippingThreshold ? settings.standardShippingFee : 0;
-  const total = Math.max(0, subtotal - discount + shippingFee);
-
-  const orderNumber = `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-  const mxpayTxnId = `MXP_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-
-  const apiKey = process.env.MXPAY_API_KEY || settings.mxPayApiKey || '';
-  const merchantId = process.env.MXPAY_MERCHANT_ID || settings.mxPayMerchantId || '';
-  const testMode = settings.mxPayTestMode ?? (!apiKey || apiKey.startsWith('mx_test'));
-
-  const pendingOrder: Order = {
-    id: `ord-${Date.now()}`,
-    orderNumber,
-    customer,
-    items: verifiedItems,
-    subtotal,
-    discount,
-    shippingFee,
-    total,
-    couponCode,
-    paymentMethod: 'mxpay',
-    paymentStatus: 'pending',
-    fulfillmentStatus: 'pending_payment',
-    paymentDetails: {
-      mxpayTransactionId: mxpayTxnId,
-      mode: testMode ? 'test' : 'live',
-    },
-    shippingDetails: {
-      estimatedDelivery: '3-5 business days',
-    },
-    statusHistory: [
-      {
-        status: 'pending_payment',
-        note: `Order initiated with MX Pay gateway (Txn: ${mxpayTxnId}). Awaiting payment authorization.`,
-        timestamp: new Date().toISOString(),
-      },
-    ],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-
-  db.saveOrder(pendingOrder);
-
-  return res.json({
-    success: true,
-    orderId: pendingOrder.id,
-    orderNumber: pendingOrder.orderNumber,
-    mxpayTransactionId: mxpayTxnId,
-    amount: total,
-    currency: 'INR',
-    apiKey: apiKey || 'mx_key_sandbox',
-    merchantId: merchantId || 'MX_MERCHANT_DEFAULT',
-    testMode,
-    message: apiKey ? 'MX Pay checkout ready.' : 'Running in MX Pay test simulation mode (provide API Key in Admin Settings to connect live gateway).',
-  });
-});
-
-app.post('/api/mxpay/verify', (req, res) => {
-  const { orderId, mxpayPaymentId, mxpayTransactionId } = req.body;
-
-  if (!orderId || !mxpayPaymentId) {
-    return res.status(400).json({ error: 'Missing payment verification credentials' });
-  }
-
-  const order = db.getOrderById(orderId);
-  if (!order) {
-    return res.status(404).json({ error: 'Order not found' });
-  }
-
-  if (order.paymentStatus === 'paid') {
-    return res.json({ success: true, order, alreadyVerified: true });
-  }
-
-  order.paymentStatus = 'paid';
-  order.fulfillmentStatus = 'confirmed';
-  order.paymentDetails = {
-    ...order.paymentDetails,
-    mxpayPaymentId,
-    mxpayTransactionId: mxpayTransactionId || order.paymentDetails?.mxpayTransactionId,
-    paidAt: new Date().toISOString(),
-  };
-
-  order.statusHistory.push({
-    status: 'confirmed',
-    note: `Payment of ₹${order.total} successfully processed and confirmed via MX Pay gateway (Payment ID: ${mxpayPaymentId}).`,
-    timestamp: new Date().toISOString(),
-  });
-  order.updatedAt = new Date().toISOString();
-
-  db.decrementStock(order.items);
-  db.saveOrder(order);
-
-  return res.json({
-    success: true,
-    order,
-    message: 'Payment verified and order confirmed successfully via MX Pay.',
   });
 });
 
