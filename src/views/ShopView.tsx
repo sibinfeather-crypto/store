@@ -22,6 +22,18 @@ export const ShopView: React.FC<ShopViewProps> = ({
   const [inStockOnly, setInStockOnly] = useState<boolean>(false);
   const [showFiltersMobile, setShowFiltersMobile] = useState<boolean>(false);
 
+  React.useEffect(() => {
+    if (initialCategory) {
+      setSelectedCategory(initialCategory);
+    } else {
+      setSelectedCategory('All');
+    }
+  }, [initialCategory]);
+
+  React.useEffect(() => {
+    setSearchQuery(initialSearch || '');
+  }, [initialSearch]);
+
   const categories: (ProductCategory | 'All')[] = [
     'All',
     'Kitchen Essentials',

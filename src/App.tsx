@@ -27,6 +27,7 @@ import { StaticPages } from './views/StaticPages.tsx';
 
 import { api } from './services/api.ts';
 import type { Product, CategoryInfo, Order } from './types/index.ts';
+import { defaultProducts, defaultCategories, defaultSettings } from './data/storeDefaults.ts';
 
 function parseUrlToRoute(pathname: string, search: string): { view: string; param: string } {
   const cleanPath = pathname.replace(/\/+$/, '') || '/';
@@ -169,11 +170,11 @@ export default function App() {
   const [viewParam, setViewParam] = useState<string>(initialRoute.param);
   const [cachedOrder, setCachedOrder] = useState<Order | null>(null);
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<CategoryInfo[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [whatsappNumber, setWhatsappNumber] = useState<string>('919876543210');
-  const [supportEmail, setSupportEmail] = useState<string>('support@fankostore.in');
+  const [products, setProducts] = useState<Product[]>(defaultProducts);
+  const [categories, setCategories] = useState<CategoryInfo[]>(defaultCategories);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [whatsappNumber, setWhatsappNumber] = useState<string>(defaultSettings.whatsappNumber || '919876543210');
+  const [supportEmail, setSupportEmail] = useState<string>(defaultSettings.supportEmail || 'support@fankostore.in');
 
   // Load products, categories, and settings
   useEffect(() => {

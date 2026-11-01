@@ -191,9 +191,9 @@ export interface AdminUser {
 export interface PincodeInfo {
   pincode: string;
   deliverable: boolean;
-  city: string;
-  state: string;
-  estimatedDays: string;
-  codAvailable: boolean;
+  city?: string;
+  state?: string;
+  estimatedDays?: string;
+  codAvailable?: boolean;
   message?: string;
 }
