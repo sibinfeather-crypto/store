@@ -15,7 +15,6 @@ import { WhatsAppButton } from './components/WhatsAppButton.tsx';
 
 import { HomeView } from './views/HomeView.tsx';
 import { ShopView } from './views/ShopView.tsx';
-import { CategoryView } from './views/CategoryView.tsx';
 import { ProductDetailView } from './views/ProductDetailView.tsx';
 import { CartView } from './views/CartView.tsx';
 import { CheckoutView } from './views/CheckoutView.tsx';
@@ -44,26 +43,24 @@ function parseUrlToRoute(pathname: string, search: string): { view: string; para
     return { view: 'shop', param: '' };
   }
   if (cleanPath === '/kitchen') {
-    return { view: 'category', param: 'kitchen-essentials' };
+    return { view: 'shop', param: 'category=Kitchen Essentials' };
   }
   if (cleanPath === '/organization') {
-    return { view: 'category', param: 'home-organization' };
+    return { view: 'shop', param: 'category=Home Organization' };
   }
   if (cleanPath === '/storage') {
-    return { view: 'category', param: 'storage-solutions' };
+    return { view: 'shop', param: 'category=Storage Solutions' };
   }
   if (cleanPath === '/cleaning') {
-    return { view: 'category', param: 'cleaning-accessories' };
-  }
-  if (cleanPath === '/bathroom') {
-    return { view: 'category', param: 'bathroom-organizers' };
-  }
-  if (cleanPath === '/daily-use') {
-    return { view: 'category', param: 'daily-use-products' };
+    return { view: 'shop', param: 'category=Cleaning Accessories' };
   }
   if (cleanPath.startsWith('/category/')) {
-    const slug = cleanPath.replace('/category/', '');
-    return { view: 'category', param: slug };
+    const slug = cleanPath.replace('/category/', '').toLowerCase();
+    if (slug.includes('kitchen')) return { view: 'shop', param: 'category=Kitchen Essentials' };
+    if (slug.includes('organ')) return { view: 'shop', param: 'category=Home Organization' };
+    if (slug.includes('storage')) return { view: 'shop', param: 'category=Storage Solutions' };
+    if (slug.includes('clean')) return { view: 'shop', param: 'category=Cleaning Accessories' };
+    return { view: 'shop', param: `category=${encodeURIComponent(slug)}` };
   }
   if (cleanPath.startsWith('/product/')) {
     const slug = cleanPath.replace('/product/', '');
@@ -102,37 +99,35 @@ function getUrlForRoute(view: string, param = ''): { path: string; title: string
     case 'home':
       return { path: '/', title: 'FanKO Store | Smart Products. Better Living.' };
     case 'shop':
+    case 'category':
+    case 'kitchen':
+    case 'organization':
+    case 'storage':
+    case 'cleaning':
+      if (view === 'kitchen') {
+        return { path: '/shop?category=Kitchen%20Essentials', title: 'Kitchen Essentials | FanKO Store' };
+      }
+      if (view === 'organization') {
+        return { path: '/shop?category=Home%20Organization', title: 'Home Organization | FanKO Store' };
+      }
+      if (view === 'storage') {
+        return { path: '/shop?category=Storage%20Solutions', title: 'Storage Solutions | FanKO Store' };
+      }
+      if (view === 'cleaning') {
+        return { path: '/shop?category=Cleaning%20Accessories', title: 'Cleaning Accessories | FanKO Store' };
+      }
       if (param.startsWith('search=')) {
         const q = decodeURIComponent(param.replace('search=', ''));
         return { path: `/shop?search=${encodeURIComponent(q)}`, title: `Search "${q}" | FanKO Store` };
       }
       if (param.startsWith('category=')) {
-        const cat = param.replace('category=', '');
+        const cat = decodeURIComponent(param.replace('category=', ''));
         return { path: `/shop?category=${encodeURIComponent(cat)}`, title: `${cat} | FanKO Store` };
       }
+      if (param) {
+        return { path: `/shop?category=${encodeURIComponent(param)}`, title: `${param} | FanKO Store` };
+      }
       return { path: '/shop', title: 'Shop All Products | FanKO Store' };
-    case 'kitchen':
-      return { path: '/kitchen', title: 'Kitchen Essentials | FanKO Store' };
-    case 'organization':
-      return { path: '/organization', title: 'Home Organization | FanKO Store' };
-    case 'storage':
-      return { path: '/storage', title: 'Storage Solutions | FanKO Store' };
-    case 'cleaning':
-      return { path: '/cleaning', title: 'Cleaning Accessories | FanKO Store' };
-    case 'bathroom':
-      return { path: '/bathroom', title: 'Bathroom Organizers | FanKO Store' };
-    case 'daily-use':
-      return { path: '/daily-use', title: 'Daily-use Products | FanKO Store' };
-    case 'category': {
-      const cleanSlug = param.toLowerCase().replace(/\s+/g, '-');
-      if (cleanSlug.includes('kitchen')) return { path: '/kitchen', title: 'Kitchen Essentials | FanKO Store' };
-      if (cleanSlug.includes('organ')) return { path: '/organization', title: 'Home Organization | FanKO Store' };
-      if (cleanSlug.includes('storage')) return { path: '/storage', title: 'Storage Solutions | FanKO Store' };
-      if (cleanSlug.includes('clean')) return { path: '/cleaning', title: 'Cleaning Accessories | FanKO Store' };
-      if (cleanSlug.includes('bath')) return { path: '/bathroom', title: 'Bathroom Organizers | FanKO Store' };
-      if (cleanSlug.includes('daily')) return { path: '/daily-use', title: 'Daily-use Products | FanKO Store' };
-      return { path: `/category/${param}`, title: `${param} | FanKO Store` };
-    }
     case 'product':
       return { path: `/product/${param}`, title: 'Product Details | FanKO Store' };
     case 'cart':
@@ -216,10 +211,31 @@ export default function App() {
 
   // Core navigation function syncing state and browser address bar
   const navigateTo = (view: string, param = '') => {
-    setCurrentView(view);
-    setViewParam(param);
+    // If navigating to a removed department page, route directly to shop with category filter
+    let effectiveView = view;
+    let effectiveParam = param;
 
-    const { path, title } = getUrlForRoute(view, param);
+    if (view === 'kitchen') {
+      effectiveView = 'shop';
+      effectiveParam = 'category=Kitchen Essentials';
+    } else if (view === 'organization') {
+      effectiveView = 'shop';
+      effectiveParam = 'category=Home Organization';
+    } else if (view === 'storage') {
+      effectiveView = 'shop';
+      effectiveParam = 'category=Storage Solutions';
+    } else if (view === 'cleaning') {
+      effectiveView = 'shop';
+      effectiveParam = 'category=Cleaning Accessories';
+    } else if (view === 'category') {
+      effectiveView = 'shop';
+      effectiveParam = param.startsWith('category=') ? param : `category=${param}`;
+    }
+
+    setCurrentView(effectiveView);
+    setViewParam(effectiveParam);
+
+    const { path, title } = getUrlForRoute(effectiveView, effectiveParam);
     document.title = title;
 
     if (window.location.pathname + window.location.search !== path) {
@@ -267,26 +283,19 @@ export default function App() {
                     />
                   )}
 
-                  {currentView === 'shop' && (
+                  {(currentView === 'shop' || currentView === 'category') && (
                     <ShopView
                       products={products}
-                      initialCategory={viewParam.startsWith('category=') ? viewParam.replace('category=', '') : undefined}
-                      initialSearch={viewParam.startsWith('search=') ? decodeURIComponent(viewParam.replace('search=', '')) : ''}
-                      onNavigate={navigateTo}
-                    />
-                  )}
-
-                  {/* Dedicated Separate Category Pages */}
-                  {(currentView === 'category' ||
-                    currentView === 'kitchen' ||
-                    currentView === 'organization' ||
-                    currentView === 'storage' ||
-                    currentView === 'cleaning' ||
-                    currentView === 'bathroom' ||
-                    currentView === 'daily-use') && (
-                    <CategoryView
-                      categorySlug={viewParam || currentView}
-                      products={products}
+                      initialCategory={
+                        viewParam.startsWith('category=')
+                          ? decodeURIComponent(viewParam.replace('category=', ''))
+                          : viewParam || undefined
+                      }
+                      initialSearch={
+                        viewParam.startsWith('search=')
+                          ? decodeURIComponent(viewParam.replace('search=', ''))
+                          : ''
+                      }
                       onNavigate={navigateTo}
                     />
                   )}

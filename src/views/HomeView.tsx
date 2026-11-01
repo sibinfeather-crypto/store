@@ -200,7 +200,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           {categories.map((cat) => (
             <button
               key={cat.id}
-              onClick={() => onNavigate('category', cat.slug || cat.name.toLowerCase().replace(/\s+/g, '-'))}
+              onClick={() => onNavigate('shop', `category=${encodeURIComponent(cat.name)}`)}
               className="group bg-white rounded-2xl p-4 border border-[#E5E8E3] text-left flex flex-col items-center text-center hover:border-[#087A42] hover:shadow-md transition-all cursor-pointer"
             >
               <div className="w-20 h-20 sm:w-24 sm:h-24 bg-[#F7F8F6] rounded-xl p-2 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">

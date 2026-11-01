@@ -68,15 +68,6 @@ export const Header: React.FC<HeaderProps> = ({ currentView, currentParam = '', 
     setSearchQuery('');
   };
 
-  const isCategoryActive = (slugOrName: string) => {
-    if (currentView === slugOrName) return true;
-    if (currentView === 'category') {
-      const p = currentParam.toLowerCase();
-      return p.includes(slugOrName.toLowerCase());
-    }
-    return false;
-  };
-
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E5E8E3] transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -106,7 +97,7 @@ export const Header: React.FC<HeaderProps> = ({ currentView, currentParam = '', 
           </button>
 
           {/* Zone 2: Navigation Links (Desktop) */}
-          <nav className="hidden lg:flex items-center gap-5 xl:gap-6 text-sm font-medium text-[#202720]">
+          <nav className="hidden lg:flex items-center gap-7 text-sm font-medium text-[#202720]">
             <button
               onClick={() => onNavigate('home')}
               className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 ${
@@ -124,58 +115,26 @@ export const Header: React.FC<HeaderProps> = ({ currentView, currentParam = '', 
               Shop All
             </button>
             <button
-              onClick={() => onNavigate('kitchen')}
-              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 ${
-                isCategoryActive('kitchen') ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : 'text-[#4A554A]'
-              }`}
-            >
-              Kitchen
-            </button>
-            <button
-              onClick={() => onNavigate('organization')}
-              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 ${
-                isCategoryActive('organization') ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : 'text-[#4A554A]'
-              }`}
-            >
-              Organization
-            </button>
-            <button
-              onClick={() => onNavigate('storage')}
-              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 ${
-                isCategoryActive('storage') ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : 'text-[#4A554A]'
-              }`}
-            >
-              Storage
-            </button>
-            <button
-              onClick={() => onNavigate('cleaning')}
-              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 ${
-                isCategoryActive('cleaning') ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : 'text-[#4A554A]'
-              }`}
-            >
-              Cleaning
-            </button>
-            <button
               onClick={() => onNavigate('track-order')}
-              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 flex items-center gap-1 ${
-                currentView === 'track-order' ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : 'text-[#4A554A]'
+              className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 flex items-center gap-1.5 ${
+                currentView === 'track-order' ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : 'text-[#5E695E]'
               }`}
             >
-              <Package className="w-3.5 h-3.5" />
+              <Package className="w-4 h-4 text-[#087A42]" />
               <span>Track Order</span>
             </button>
             <button
               onClick={() => onNavigate('about')}
               className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 ${
-                currentView === 'about' ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : 'text-[#4A554A]'
+                currentView === 'about' ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : 'text-[#5E695E]'
               }`}
             >
-              About
+              About Us
             </button>
             <button
               onClick={() => onNavigate('contact')}
               className={`hover:text-[#087A42] transition-colors whitespace-nowrap cursor-pointer py-1 ${
-                currentView === 'contact' ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : 'text-[#4A554A]'
+                currentView === 'contact' ? 'text-[#087A42] font-bold border-b-2 border-[#087A42]' : 'text-[#5E695E]'
               }`}
             >
               Contact
@@ -358,49 +317,15 @@ export const Header: React.FC<HeaderProps> = ({ currentView, currentParam = '', 
                   Shop All Products
                 </button>
 
-                {/* Separate Department Pages */}
-                <div className="py-1 px-3 text-[11px] font-bold text-[#5E695E] uppercase tracking-wider">
-                  Departments
-                </div>
                 <button
                   onClick={() => {
-                    onNavigate('kitchen');
+                    onNavigate('track-order');
                     setMobileMenuOpen(false);
                   }}
-                  className="w-full flex items-center justify-between py-2 px-3 rounded-lg text-sm font-medium hover:bg-[#F7F8F6] text-[#202720]"
+                  className="w-full flex items-center gap-2.5 py-2.5 px-3 rounded-lg text-sm font-semibold hover:bg-[#F7F8F6] text-[#202720]"
                 >
-                  <span className="flex items-center gap-2"><span>🍳</span> Kitchen Essentials</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                </button>
-                <button
-                  onClick={() => {
-                    onNavigate('organization');
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full flex items-center justify-between py-2 px-3 rounded-lg text-sm font-medium hover:bg-[#F7F8F6] text-[#202720]"
-                >
-                  <span className="flex items-center gap-2"><span>✨</span> Home Organization</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                </button>
-                <button
-                  onClick={() => {
-                    onNavigate('storage');
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full flex items-center justify-between py-2 px-3 rounded-lg text-sm font-medium hover:bg-[#F7F8F6] text-[#202720]"
-                >
-                  <span className="flex items-center gap-2"><span>📦</span> Storage Solutions</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                </button>
-                <button
-                  onClick={() => {
-                    onNavigate('cleaning');
-                    setMobileMenuOpen(false);
-                  }}
-                  className="w-full flex items-center justify-between py-2 px-3 rounded-lg text-sm font-medium hover:bg-[#F7F8F6] text-[#202720]"
-                >
-                  <span className="flex items-center gap-2"><span>🧼</span> Cleaning Accessories</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                  <Package className="w-4 h-4 text-[#087A42]" />
+                  <span>Track Your Order</span>
                 </button>
 
                 <div className="pt-2 border-t border-[#E5E8E3] mt-2">
