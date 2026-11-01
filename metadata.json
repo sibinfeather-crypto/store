@@ -1,0 +1,6 @@
+{
+  "name": "FanKO Store - Smart Products. Better Living.",
+  "description": "Premium online store for smart kitchen essentials, home organizers, storage solutions, and daily-use products in India.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
