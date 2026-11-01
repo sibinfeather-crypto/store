@@ -11,7 +11,7 @@
       "description": "Bring structured calm to your dressing table or bathroom counter with this fluted vanity organizer. Designed with multiple stepped compartments to hold makeup brushes, skin serums, eyeliners, and grooming accessories upright and within arm’s reach. Sturdy footed design keeps the base elevated off wet surfaces.",
       "price": 699,
       "salePrice": 499,
-      "stock": 44,
+      "stock": 42,
       "status": "in_stock",
       "images": [
         "/assets/aistudio/Ribbed_White_Vanity_Organizer_0347519c.png"
@@ -409,6 +409,156 @@
   ],
   "orders": [
     {
+      "id": "ord-1793523397773",
+      "orderNumber": "FKO-2026-9553",
+      "customer": {
+        "fullName": "sibin",
+        "phone": "8825996702",
+        "email": "sibinfano@gmail.com",
+        "addressLine": "west neyyor",
+        "landmark": "",
+        "city": "nagercoil",
+        "state": "Tamil Nadu",
+        "pincode": "629803"
+      },
+      "items": [
+        {
+          "productId": "prod-007",
+          "name": "FanKO Precision Pour Glass Oil & Vinegar Dispenser Jug (600ml)",
+          "sku": "FKO-KIT-007",
+          "price": 529,
+          "quantity": 1,
+          "image": "/assets/aistudio/WhatsApp_Image_2026-09-13_at_7.38.0_7cad6069.jpeg",
+          "subtotal": 529
+        }
+      ],
+      "subtotal": 529,
+      "discount": 0,
+      "shippingFee": 0,
+      "total": 529,
+      "paymentMethod": "mxpay",
+      "paymentStatus": "pending",
+      "fulfillmentStatus": "pending_payment",
+      "paymentDetails": {
+        "mxpayTransactionId": "MXP_1793523397773_DMXYAM",
+        "mode": "test"
+      },
+      "shippingDetails": {
+        "estimatedDelivery": "3-5 business days"
+      },
+      "statusHistory": [
+        {
+          "status": "pending_payment",
+          "note": "Order initiated with MX Pay gateway (Txn: MXP_1793523397773_DMXYAM). Awaiting payment authorization.",
+          "timestamp": "2026-11-01T08:56:37.773Z"
+        }
+      ],
+      "createdAt": "2026-11-01T08:56:37.773Z",
+      "updatedAt": "2026-11-01T08:56:37.773Z"
+    },
+    {
+      "id": "ord-1793523381531",
+      "orderNumber": "FKO-2026-8121",
+      "customer": {
+        "fullName": "sibin",
+        "phone": "8825996702",
+        "email": "sibinfano@gmail.com",
+        "addressLine": "west neyyor",
+        "landmark": "",
+        "city": "nagercoil",
+        "state": "Tamil Nadu",
+        "pincode": "629803"
+      },
+      "items": [
+        {
+          "productId": "prod-001",
+          "name": "FanKO Ribbed Multi-Slot Vanity & Countertop Organizer",
+          "sku": "FKO-ORG-001",
+          "price": 499,
+          "quantity": 1,
+          "image": "/assets/aistudio/Ribbed_White_Vanity_Organizer_0347519c.png",
+          "subtotal": 499
+        }
+      ],
+      "subtotal": 499,
+      "discount": 0,
+      "shippingFee": 0,
+      "total": 499,
+      "paymentMethod": "cod",
+      "paymentStatus": "pending",
+      "fulfillmentStatus": "confirmed",
+      "paymentDetails": {
+        "mode": "cod"
+      },
+      "shippingDetails": {
+        "estimatedDelivery": "3-5 business days"
+      },
+      "statusHistory": [
+        {
+          "status": "confirmed",
+          "note": "Order confirmed with Cash on Delivery (COD). Amount will be collected upon doorstep delivery.",
+          "timestamp": "2026-11-01T08:56:21.531Z"
+        }
+      ],
+      "createdAt": "2026-11-01T08:56:21.531Z",
+      "updatedAt": "2026-11-01T08:56:21.531Z"
+    },
+    {
+      "id": "ord-1793523295284",
+      "orderNumber": "FKO-2026-7630",
+      "customer": {
+        "fullName": "sibin",
+        "phone": "8825996702",
+        "email": "sibinfano@gmail.com",
+        "addressLine": "west neyyor",
+        "landmark": "",
+        "city": "nagercoil",
+        "state": "Tamil Nadu",
+        "pincode": "629803"
+      },
+      "items": [
+        {
+          "productId": "prod-001",
+          "name": "FanKO Ribbed Multi-Slot Vanity & Countertop Organizer",
+          "sku": "FKO-ORG-001",
+          "price": 499,
+          "quantity": 1,
+          "image": "/assets/aistudio/Ribbed_White_Vanity_Organizer_0347519c.png",
+          "subtotal": 499
+        }
+      ],
+      "subtotal": 499,
+      "discount": 0,
+      "shippingFee": 0,
+      "total": 499,
+      "paymentMethod": "mxpay",
+      "paymentStatus": "paid",
+      "fulfillmentStatus": "confirmed",
+      "paymentDetails": {
+        "mxpayTransactionId": "MXP_1793523295284_202Z2U",
+        "mode": "test",
+        "mxpayPaymentId": "mx_pay_1793523343575_ZNYB",
+        "paidAt": "2026-11-01T08:55:43.318Z"
+      },
+      "shippingDetails": {
+        "estimatedDelivery": "3-5 business days"
+      },
+      "statusHistory": [
+        {
+          "status": "pending_payment",
+          "note": "Order initiated with MX Pay gateway (Txn: MXP_1793523295284_202Z2U). Awaiting payment authorization.",
+          "timestamp": "2026-11-01T08:54:55.284Z"
+        },
+        {
+          "status": "confirmed",
+          "note": "Payment of ₹499 successfully processed and confirmed via MX Pay gateway (Payment ID: mx_pay_1793523343575_ZNYB).",
+          "timestamp": "2026-11-01T08:55:43.318Z"
+        }
+      ],
+      "createdAt": "2026-11-01T08:54:55.284Z",
+      "updatedAt": "2026-11-01T08:55:43.318Z"
+    },
+    {
       "id": "ord-1793515304007",
       "orderNumber": "FKO-2026-8189",
       "customer": {
@@ -548,9 +698,10 @@
     "freeShippingThreshold": 499,
     "standardShippingFee": 49,
     "codEnabled": true,
-    "razorpayKeyId": "",
-    "razorpayTestMode": true,
-    "hasRazorpaySecret": false,
+    "mxPayEnabled": true,
+    "mxPayApiKey": "76D73A7E-B18F8999-9409FA32-A23F5F04-E2DB1357-1262E2D8",
+    "mxPayMerchantId": "FANKO_STORE",
+    "mxPayTestMode": false,
     "currency": "INR"
   },
   "adminUsers": [],

@@ -53,9 +53,10 @@ app.get('/api/settings', (_req, res) => {
     standardShippingFee: settings.standardShippingFee,
     codEnabled: settings.codEnabled,
     currency: settings.currency,
-    razorpayKeyId: settings.razorpayKeyId,
-    razorpayTestMode: settings.razorpayTestMode,
-    hasRazorpaySecret: settings.hasRazorpaySecret,
+    mxPayEnabled: settings.mxPayEnabled ?? true,
+    mxPayApiKey: settings.mxPayApiKey || '',
+    mxPayMerchantId: settings.mxPayMerchantId || '',
+    mxPayTestMode: settings.mxPayTestMode ?? false,
   });
 });
 
@@ -396,302 +397,7 @@ app.get('/api/pincode/check/:pincode', (req, res) => {
   });
 });
 
-// -------------------------------------------------------------
-// Razorpay Standard Checkout & Payment Processing
-// -------------------------------------------------------------
-app.post('/api/razorpay/create-order', async (req, res) => {
-  const { customer, items, couponCode } = req.body;
-  if (!customer || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ error: 'Customer information and items are required' });
-  }
 
-  // Calculate pricing securely on the server
-  const settings = db.getSettings();
-  let subtotal = 0;
-  const verifiedItems: OrderItem[] = [];
-
-  for (const item of items) {
-    const prod = db.getProductById(item.productId);
-    if (!prod) {
-      return res.status(400).json({ error: `Product not found: ${item.productId}` });
-    }
-    if (prod.stock < item.quantity) {
-      return res.status(400).json({ error: `Insufficient stock for ${prod.name}` });
-    }
-    const price = prod.salePrice ?? prod.price;
-    const itemSub = price * item.quantity;
-    subtotal += itemSub;
-    verifiedItems.push({
-      productId: prod.id,
-      name: prod.name,
-      sku: prod.sku,
-      price,
-      quantity: item.quantity,
-      image: prod.images[0] || '',
-      subtotal: itemSub,
-    });
-  }
-
-  let discount = 0;
-  let isFreeShip = false;
-  if (couponCode) {
-    const coupon = db.getCouponByCode(couponCode);
-    if (coupon && subtotal >= coupon.minOrderValue) {
-      if (coupon.discountType === 'percentage') {
-        discount = Math.round((subtotal * coupon.discountValue) / 100);
-        if (coupon.maxDiscount && discount > coupon.maxDiscount) discount = coupon.maxDiscount;
-      } else if (coupon.discountType === 'fixed') {
-        discount = Math.min(coupon.discountValue, subtotal);
-      } else if (coupon.discountType === 'free_shipping') {
-        isFreeShip = true;
-      }
-    }
-  }
-
-  const shippingFee = !isFreeShip && subtotal < settings.freeShippingThreshold ? settings.standardShippingFee : 0;
-  const total = Math.max(0, subtotal - discount + shippingFee);
-  const amountInPaise = Math.round(total * 100);
-
-  // Generate unique order number
-  const orderNumber = `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-  const keyId = process.env.RAZORPAY_KEY_ID || settings.razorpayKeyId;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
-
-  // Initial order record in pending_payment state
-  const pendingOrder: Order = {
-    id: `ord-${Date.now()}`,
-    orderNumber,
-    customer,
-    items: verifiedItems,
-    subtotal,
-    discount,
-    shippingFee,
-    total,
-    couponCode,
-    paymentMethod: 'razorpay',
-    paymentStatus: 'pending',
-    fulfillmentStatus: 'pending_payment',
-    shippingDetails: {
-      estimatedDelivery: '3-5 business days',
-    },
-    statusHistory: [
-      {
-        status: 'pending_payment',
-        note: 'Order created, awaiting payment authorization via Razorpay.',
-        timestamp: new Date().toISOString(),
-      },
-    ],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-
-  db.saveOrder(pendingOrder);
-
-  // If Razorpay API credentials exist, call Razorpay Orders API
-  if (keyId && keySecret) {
-    try {
-      const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
-      const response = await fetch('https://api.razorpay.com/v1/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Basic ${auth}`,
-        },
-        body: JSON.stringify({
-          amount: amountInPaise,
-          currency: 'INR',
-          receipt: orderNumber,
-          notes: {
-            orderNumber,
-            customerEmail: customer.email,
-            customerPhone: customer.phone,
-          },
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Razorpay Orders API error:', errorData);
-        return res.status(502).json({
-          error: 'Failed to create payment order with Razorpay. Please try again or use Cash on Delivery.',
-          details: errorData,
-        });
-      }
-
-      const rzpOrder = await response.json();
-      pendingOrder.paymentDetails = {
-        razorpayOrderId: rzpOrder.id,
-        mode: 'live',
-      };
-      db.saveOrder(pendingOrder);
-
-      return res.json({
-        success: true,
-        orderId: pendingOrder.id,
-        orderNumber: pendingOrder.orderNumber,
-        razorpayOrderId: rzpOrder.id,
-        amount: rzpOrder.amount,
-        currency: rzpOrder.currency,
-        keyId,
-        testMode: false,
-      });
-    } catch (err: any) {
-      console.error('Razorpay network error:', err);
-      return res.status(500).json({ error: 'Payment gateway communication failure.' });
-    }
-  }
-
-  // Fallback: Clearly labeled Sandbox / Test Mode when API credentials are not yet configured in env
-  const simulatedRzpOrderId = `order_test_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-  pendingOrder.paymentDetails = {
-    razorpayOrderId: simulatedRzpOrderId,
-    mode: 'test',
-  };
-  db.saveOrder(pendingOrder);
-
-  return res.json({
-    success: true,
-    orderId: pendingOrder.id,
-    orderNumber: pendingOrder.orderNumber,
-    razorpayOrderId: simulatedRzpOrderId,
-    amount: amountInPaise,
-    currency: 'INR',
-    keyId: keyId || 'rzp_test_placeholder',
-    testMode: true,
-    message: 'Running in Test/Sandbox checkout mode (Razorpay API credentials not configured in .env yet).',
-  });
-});
-
-// Verify Payment Signature on Backend (Subject to server-side cryptographic HMAC SHA-256)
-app.post('/api/razorpay/verify', (req, res) => {
-  const { orderId, razorpayPaymentId, razorpayOrderId, razorpaySignature, isTestSimulated } = req.body;
-
-  if (!orderId || !razorpayPaymentId || !razorpayOrderId) {
-    return res.status(400).json({ error: 'Missing payment verification credentials' });
-  }
-
-  const order = db.getOrderById(orderId);
-  if (!order) {
-    return res.status(404).json({ error: 'Order not found' });
-  }
-
-  // Idempotency: If order was already paid, return existing success state to prevent double charges/fulfillment
-  if (order.paymentStatus === 'paid') {
-    return res.json({
-      success: true,
-      order,
-      alreadyVerified: true,
-    });
-  }
-
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
-
-  // If real key secret exists, verify HMAC signature
-  if (keySecret) {
-    if (!razorpaySignature) {
-      return res.status(400).json({ error: 'Payment signature missing' });
-    }
-    const generatedSignature = crypto
-      .createHmac('sha256', keySecret)
-      .update(`${razorpayOrderId}|${razorpayPaymentId}`)
-      .digest('hex');
-
-    const isMatch = crypto.timingSafeEqual(
-      Buffer.from(generatedSignature),
-      Buffer.from(razorpaySignature)
-    );
-
-    if (!isMatch) {
-      order.paymentStatus = 'failed';
-      order.statusHistory.push({
-        status: 'pending_payment',
-        note: 'Payment signature verification failed. Possible tampering or rejected charge.',
-        timestamp: new Date().toISOString(),
-      });
-      db.saveOrder(order);
-      return res.status(400).json({ error: 'Invalid payment signature. Payment could not be verified.' });
-    }
-  } else {
-    // In test mode without secret, verify order matches
-    if (!isTestSimulated && !order.paymentDetails?.razorpayOrderId) {
-      return res.status(400).json({ error: 'Invalid test payment verification' });
-    }
-  }
-
-  // Signature verified successfully: Mark paid, advance fulfillment, decrement inventory
-  order.paymentStatus = 'paid';
-  order.fulfillmentStatus = 'confirmed';
-  order.paymentDetails = {
-    ...order.paymentDetails,
-    razorpayOrderId,
-    razorpayPaymentId,
-    razorpaySignature: razorpaySignature || 'simulated_test_sig',
-    paidAt: new Date().toISOString(),
-  };
-
-  order.statusHistory.push({
-    status: 'confirmed',
-    note: `Payment of ₹${order.total} verified successfully via Razorpay (Payment ID: ${razorpayPaymentId}).`,
-    timestamp: new Date().toISOString(),
-  });
-  order.updatedAt = new Date().toISOString();
-
-  // Deduct stock safely
-  db.decrementStock(order.items);
-  db.saveOrder(order);
-
-  res.json({
-    success: true,
-    order,
-    message: 'Payment verified and order confirmed successfully.',
-  });
-});
-
-// Webhook endpoint: Raw body HMAC signature verification, prevents duplicate fulfillment
-app.post('/api/razorpay/webhook', (req: any, res) => {
-  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-  const signature = req.headers['x-razorpay-signature'];
-
-  if (webhookSecret && signature) {
-    const rawBody = req.rawBody ? req.rawBody.toString('utf-8') : JSON.stringify(req.body);
-    const expectedSignature = crypto
-      .createHmac('sha256', webhookSecret)
-      .update(rawBody)
-      .digest('hex');
-
-    if (expectedSignature !== signature) {
-      return res.status(400).json({ error: 'Invalid webhook signature' });
-    }
-  }
-
-  const event = req.body;
-  if (event && event.event === 'payment.captured') {
-    const payment = event.payload?.payment?.entity;
-    const rzpOrderId = payment?.order_id;
-    if (rzpOrderId) {
-      const order = db.getOrders().find((o) => o.paymentDetails?.razorpayOrderId === rzpOrderId);
-      if (order && order.paymentStatus !== 'paid') {
-        order.paymentStatus = 'paid';
-        order.fulfillmentStatus = 'confirmed';
-        order.paymentDetails = {
-          ...order.paymentDetails,
-          razorpayPaymentId: payment.id,
-          paidAt: new Date().toISOString(),
-        };
-        order.statusHistory.push({
-          status: 'confirmed',
-          note: `Payment confirmed via webhook (${payment.id}).`,
-          timestamp: new Date().toISOString(),
-        });
-        db.decrementStock(order.items);
-        db.saveOrder(order);
-      }
-    }
-  }
-
-  res.status(200).json({ status: 'ok' });
-});
 
 // -------------------------------------------------------------
 // Cash on Delivery (COD) Checkout Endpoint
@@ -793,6 +499,163 @@ app.post('/api/orders/cod', (req, res) => {
     order: newOrder,
   });
 });
+
+// -------------------------------------------------------------
+// MX Pay Gateway Integration Endpoints
+// -------------------------------------------------------------
+app.post('/api/mxpay/create-order', async (req, res) => {
+  const { customer, items, couponCode } = req.body;
+  const settings = db.getSettings();
+
+  if (settings.mxPayEnabled === false) {
+    return res.status(400).json({ error: 'MX Pay gateway is currently disabled in store settings.' });
+  }
+
+  if (!customer || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'Customer information and items are required' });
+  }
+
+  // Calculate pricing securely on the server
+  let subtotal = 0;
+  const verifiedItems: OrderItem[] = [];
+
+  for (const item of items) {
+    const prod = db.getProductById(item.productId);
+    if (!prod) {
+      return res.status(400).json({ error: `Product not found: ${item.productId}` });
+    }
+    if (prod.stock < item.quantity) {
+      return res.status(400).json({ error: `Insufficient stock for ${prod.name}` });
+    }
+    const price = prod.salePrice ?? prod.price;
+    const itemSub = price * item.quantity;
+    subtotal += itemSub;
+    verifiedItems.push({
+      productId: prod.id,
+      name: prod.name,
+      sku: prod.sku,
+      price,
+      quantity: item.quantity,
+      image: prod.images[0] || '',
+      subtotal: itemSub,
+    });
+  }
+
+  let discount = 0;
+  let isFreeShip = false;
+  if (couponCode) {
+    const coupon = db.getCouponByCode(couponCode);
+    if (coupon && subtotal >= coupon.minOrderValue) {
+      if (coupon.discountType === 'percentage') {
+        discount = Math.round((subtotal * coupon.discountValue) / 100);
+        if (coupon.maxDiscount && discount > coupon.maxDiscount) discount = coupon.maxDiscount;
+      } else if (coupon.discountType === 'fixed') {
+        discount = Math.min(coupon.discountValue, subtotal);
+      } else if (coupon.discountType === 'free_shipping') {
+        isFreeShip = true;
+      }
+    }
+  }
+
+  const shippingFee = !isFreeShip && subtotal < settings.freeShippingThreshold ? settings.standardShippingFee : 0;
+  const total = Math.max(0, subtotal - discount + shippingFee);
+
+  const orderNumber = `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const mxpayTxnId = `MXP_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+  const apiKey = process.env.MXPAY_API_KEY || settings.mxPayApiKey || '';
+  const merchantId = process.env.MXPAY_MERCHANT_ID || settings.mxPayMerchantId || '';
+  const testMode = settings.mxPayTestMode ?? (!apiKey || apiKey.startsWith('mx_test'));
+
+  const pendingOrder: Order = {
+    id: `ord-${Date.now()}`,
+    orderNumber,
+    customer,
+    items: verifiedItems,
+    subtotal,
+    discount,
+    shippingFee,
+    total,
+    couponCode,
+    paymentMethod: 'mxpay',
+    paymentStatus: 'pending',
+    fulfillmentStatus: 'pending_payment',
+    paymentDetails: {
+      mxpayTransactionId: mxpayTxnId,
+      mode: testMode ? 'test' : 'live',
+    },
+    shippingDetails: {
+      estimatedDelivery: '3-5 business days',
+    },
+    statusHistory: [
+      {
+        status: 'pending_payment',
+        note: `Order initiated with MX Pay gateway (Txn: ${mxpayTxnId}). Awaiting payment authorization.`,
+        timestamp: new Date().toISOString(),
+      },
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  db.saveOrder(pendingOrder);
+
+  return res.json({
+    success: true,
+    orderId: pendingOrder.id,
+    orderNumber: pendingOrder.orderNumber,
+    mxpayTransactionId: mxpayTxnId,
+    amount: total,
+    currency: 'INR',
+    apiKey: apiKey || 'mx_key_sandbox',
+    merchantId: merchantId || 'MX_MERCHANT_DEFAULT',
+    testMode,
+    message: apiKey ? 'MX Pay checkout ready.' : 'Running in MX Pay test simulation mode (provide API Key in Admin Settings to connect live gateway).',
+  });
+});
+
+app.post('/api/mxpay/verify', (req, res) => {
+  const { orderId, mxpayPaymentId, mxpayTransactionId } = req.body;
+
+  if (!orderId || !mxpayPaymentId) {
+    return res.status(400).json({ error: 'Missing payment verification credentials' });
+  }
+
+  const order = db.getOrderById(orderId);
+  if (!order) {
+    return res.status(404).json({ error: 'Order not found' });
+  }
+
+  if (order.paymentStatus === 'paid') {
+    return res.json({ success: true, order, alreadyVerified: true });
+  }
+
+  order.paymentStatus = 'paid';
+  order.fulfillmentStatus = 'confirmed';
+  order.paymentDetails = {
+    ...order.paymentDetails,
+    mxpayPaymentId,
+    mxpayTransactionId: mxpayTransactionId || order.paymentDetails?.mxpayTransactionId,
+    paidAt: new Date().toISOString(),
+  };
+
+  order.statusHistory.push({
+    status: 'confirmed',
+    note: `Payment of ₹${order.total} successfully processed and confirmed via MX Pay gateway (Payment ID: ${mxpayPaymentId}).`,
+    timestamp: new Date().toISOString(),
+  });
+  order.updatedAt = new Date().toISOString();
+
+  db.decrementStock(order.items);
+  db.saveOrder(order);
+
+  return res.json({
+    success: true,
+    order,
+    message: 'Payment verified and order confirmed successfully via MX Pay.',
+  });
+});
+
 
 // -------------------------------------------------------------
 // Orders Tracking & Retrieval

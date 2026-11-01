@@ -295,7 +295,7 @@ export const StaticPages: React.FC<StaticPagesProps> = ({
             <div className="pt-6">
               <h2 className="text-sm font-bold text-[#202720] mb-2">What payment methods do you accept online?</h2>
               <p className="text-xs text-[#5E695E] leading-relaxed">
-                We accept all major payment methods powered securely by Razorpay: UPI (Google Pay, PhonePe, Paytm, BHIM), RuPay cards, Visa, Mastercard, and NetBanking across 50+ Indian banks.
+                We accept all major payment methods powered securely by MX Pay: UPI (Google Pay, PhonePe, Paytm, BHIM), RuPay cards, Visa, Mastercard, and NetBanking across 50+ Indian banks.
               </p>
             </div>
 
@@ -359,7 +359,7 @@ export const StaticPages: React.FC<StaticPagesProps> = ({
             </ol>
 
             <h2 className="text-sm font-bold text-[#202720]">Refund Processing</h2>
-            <p>For prepaid Razorpay orders, refunds are processed back to the original source method (UPI/card/bank) within 5-7 working days. For COD orders, refunds are issued via direct UPI transfer to your verified account.</p>
+            <p>For prepaid MX Pay orders, refunds are processed back to the original source method (UPI/card/bank) within 5-7 working days. For COD orders, refunds are issued via direct UPI transfer to your verified account.</p>
           </div>
         </div>
       )}
@@ -377,7 +377,7 @@ export const StaticPages: React.FC<StaticPagesProps> = ({
             <p>We collect essential delivery information: customer full name, delivery address, postal PIN code, mobile phone number, and email address solely for order processing, logistics dispatch, and invoice generation.</p>
 
             <h2 className="text-sm font-bold text-[#202720]">2. Payment Data Security</h2>
-            <p>We never store or have access to your credit/debit card numbers, CVV, NetBanking passwords, or UPI PINs. All financial transactions are handled on 256-bit PCI-DSS compliant secure gateways managed directly by Razorpay.</p>
+            <p>We never store or have access to your credit/debit card numbers, CVV, NetBanking passwords, or UPI PINs. All financial transactions are handled on 256-bit PCI-DSS compliant secure gateways managed directly by MX Pay.</p>
 
             <h2 className="text-sm font-bold text-[#202720]">3. No Data Selling</h2>
             <p>We do not sell, rent, or trade your personal information to third-party marketing brokers under any circumstances.</p>

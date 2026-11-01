@@ -34,7 +34,7 @@ export const Footer: React.FC<FooterProps> = ({
             </div>
             <div>
               <p className="font-semibold text-xs text-[#202720]">Secure Payment</p>
-              <p className="text-[11px] text-[#5E695E]">Razorpay & UPI Protected</p>
+              <p className="text-[11px] text-[#5E695E]">MX Pay & UPI Protected</p>
             </div>
           </div>
 
@@ -247,7 +247,7 @@ export const Footer: React.FC<FooterProps> = ({
           
           <div className="flex items-center gap-3 text-[11px] font-medium text-slate-500">
             <span>Accepted Payments:</span>
-            <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-semibold">Razorpay</span>
+            <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-semibold">MX Pay</span>
             <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-semibold">UPI</span>
             <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-semibold">Cards</span>
             <span className="px-2 py-0.5 bg-slate-100 rounded text-slate-700 font-semibold">NetBanking</span>

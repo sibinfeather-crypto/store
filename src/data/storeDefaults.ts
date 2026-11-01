@@ -402,9 +402,11 @@ export const defaultSettings: StoreSettings = {
   freeShippingThreshold: 499,
   standardShippingFee: 49,
   codEnabled: true,
-  razorpayKeyId: '',
-  razorpayTestMode: true,
-  hasRazorpaySecret: false,
+  mxPayEnabled: true,
+  mxPayApiKey: '76D73A7E-B18F8999-9409FA32-A23F5F04-E2DB1357-1262E2D8',
+  mxPayMerchantId: 'FANKO_STORE',
+  mxPaySecretKey: '',
+  mxPayTestMode: false,
   currency: 'INR',
 };
 

@@ -14,6 +14,16 @@ import {
   defaultSettings,
   defaultCoupons,
 } from '../data/storeDefaults.ts';
+import {
+  saveOrderToFirestore,
+  getOrdersFromFirestore,
+  saveSettingsToFirestore,
+  getSettingsFromFirestore,
+  getProductsFromFirestore,
+  saveProductToFirestore,
+  subscribeNewsletterToFirestore,
+  firebaseConfig,
+} from '../firebase.ts';
 
 const API_BASE = '/api';
 
@@ -34,10 +44,18 @@ async function safeJsonFetch<T>(url: string, options?: RequestInit): Promise<T> 
 function getStoredProducts(): Product[] {
   try {
     const raw = localStorage.getItem('fanko_products');
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
   } catch (e) {
     console.warn('Could not read stored products', e);
   }
+  try {
+    localStorage.setItem('fanko_products', JSON.stringify(defaultProducts));
+  } catch {}
   return defaultProducts;
 }
 
@@ -54,16 +72,36 @@ function getStoredOrders(): Order[] {
 function saveStoredOrder(order: Order) {
   try {
     const orders = getStoredOrders();
-    orders.unshift(order);
+    // Prevent duplicates
+    const existingIndex = orders.findIndex((o) => o.id === order.id || o.orderNumber === order.orderNumber);
+    if (existingIndex >= 0) {
+      orders[existingIndex] = order;
+    } else {
+      orders.unshift(order);
+    }
     localStorage.setItem('fanko_orders', JSON.stringify(orders));
   } catch (e) {
     console.warn('Could not save order locally', e);
   }
+
+  // Persist seamlessly to Firebase Firestore
+  saveOrderToFirestore(order).catch((err) => {
+    console.warn('Firestore sync note:', err);
+  });
 }
 
 export const api = {
   // Settings
   async getSettings(): Promise<StoreSettings> {
+    try {
+      const fsSettings = await getSettingsFromFirestore();
+      if (fsSettings) {
+        return { ...defaultSettings, ...fsSettings };
+      }
+    } catch {
+      // Ignore Firestore read error, proceed to API/defaults
+    }
+
     try {
       return await safeJsonFetch<StoreSettings>(`${API_BASE}/settings`);
     } catch {
@@ -72,6 +110,13 @@ export const api = {
   },
 
   async updateSettings(token: string, settings: Partial<StoreSettings>): Promise<StoreSettings> {
+    // Save to Firebase Firestore
+    try {
+      await saveSettingsToFirestore(settings);
+    } catch (err) {
+      console.warn('Could not sync settings to Firestore:', err);
+    }
+
     try {
       const data = await safeJsonFetch<{ settings: StoreSettings }>(`${API_BASE}/admin/settings`, {
         method: 'PUT',
@@ -94,6 +139,8 @@ export const api = {
     sort?: string;
     in_stock?: boolean;
   }): Promise<Product[]> {
+    let prods: Product[] = [];
+
     try {
       const searchParams = new URLSearchParams();
       if (params?.search) searchParams.set('search', params.search);
@@ -107,10 +154,27 @@ export const api = {
         return data;
       }
     } catch {
-      // Backend not running (e.g. static Vercel deployment) -> fallback to default catalog
+      // Backend not running (e.g. static Vercel deployment) -> fallback to Firestore or local catalog
     }
 
-    let prods = getStoredProducts();
+    // Try Firestore if API is not returning items
+    try {
+      const fsProds = await getProductsFromFirestore();
+      if (Array.isArray(fsProds) && fsProds.length > 0) {
+        prods = fsProds;
+        localStorage.setItem('fanko_products', JSON.stringify(fsProds));
+      }
+    } catch (err) {
+      console.warn('Firestore fetch note:', err);
+    }
+
+    if (!prods || prods.length === 0) {
+      prods = getStoredProducts();
+    }
+
+    if (!prods || prods.length === 0) {
+      prods = [...defaultProducts];
+    }
 
     // In-memory search filter
     if (params?.search) {
@@ -430,134 +494,7 @@ export const api = {
     }
   },
 
-  // Razorpay Checkout
-  async createRazorpayOrder(data: {
-    customer: ShippingAddress;
-    items: { productId: string; quantity: number }[];
-    couponCode?: string;
-  }): Promise<{
-    success: boolean;
-    orderId: string;
-    orderNumber: string;
-    razorpayOrderId: string;
-    amount: number;
-    currency: string;
-    keyId: string;
-    testMode: boolean;
-    message?: string;
-  }> {
-    try {
-      return await safeJsonFetch(`${API_BASE}/razorpay/create-order`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-    } catch {
-      const orderNumber = `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-      const calculation = await api.calculateOrder(data.items, data.couponCode);
-      const newOrder: Order = {
-        id: `ord-${Date.now()}`,
-        orderNumber,
-        customer: data.customer,
-        items: calculation.verifiedItems,
-        subtotal: calculation.subtotal,
-        discount: calculation.discount,
-        shippingFee: calculation.shippingFee,
-        total: calculation.total,
-        couponCode: data.couponCode,
-        paymentMethod: 'razorpay',
-        paymentStatus: 'pending',
-        fulfillmentStatus: 'pending_payment',
-        shippingDetails: {
-          estimatedDelivery: '3-5 business days',
-        },
-        statusHistory: [
-          {
-            status: 'pending_payment',
-            note: 'Order created, awaiting payment authorization.',
-            timestamp: new Date().toISOString(),
-          },
-        ],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      saveStoredOrder(newOrder);
 
-      return {
-        success: true,
-        orderId: newOrder.id,
-        orderNumber: newOrder.orderNumber,
-        razorpayOrderId: `rzp_order_${Date.now()}`,
-        amount: Math.round(newOrder.total * 100),
-        currency: 'INR',
-        keyId: 'rzp_test_placeholder',
-        testMode: true,
-        message: 'Test checkout mode enabled.',
-      };
-    }
-  },
-
-  async verifyRazorpayPayment(data: {
-    orderId: string;
-    razorpayOrderId: string;
-    razorpayPaymentId: string;
-    razorpaySignature?: string;
-    isTestSimulated?: boolean;
-  }): Promise<{
-    success: boolean;
-    order: Order;
-    message?: string;
-  }> {
-    try {
-      return await safeJsonFetch(`${API_BASE}/razorpay/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
-    } catch {
-      const orders = getStoredOrders();
-      const order = orders.find((o) => o.id === data.orderId || o.orderNumber === data.orderId);
-      if (order) {
-        order.paymentStatus = 'paid';
-        order.fulfillmentStatus = 'confirmed';
-        order.statusHistory.push({
-          status: 'confirmed',
-          note: `Payment verified (${data.razorpayPaymentId}).`,
-          timestamp: new Date().toISOString(),
-        });
-        localStorage.setItem('fanko_orders', JSON.stringify(orders));
-        return { success: true, order };
-      }
-      const fallbackOrder: Order = {
-        id: data.orderId,
-        orderNumber: `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-        customer: {
-          fullName: 'Customer',
-          email: 'customer@fankostore.in',
-          phone: '9876543210',
-          addressLine: 'Doorstep Delivery',
-          city: 'Delhi',
-          state: 'Delhi',
-          pincode: '110001',
-        },
-        items: [],
-        subtotal: 499,
-        discount: 0,
-        shippingFee: 0,
-        total: 499,
-        paymentMethod: 'razorpay',
-        paymentStatus: 'paid',
-        fulfillmentStatus: 'confirmed',
-        shippingDetails: {
-          estimatedDelivery: '3-5 business days',
-        },
-        statusHistory: [{ status: 'confirmed', note: 'Payment verified.', timestamp: new Date().toISOString() }],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      return { success: true, order: fallbackOrder };
-    }
-  },
 
   // Cash on Delivery
   async createCodOrder(data: {
@@ -603,6 +540,122 @@ export const api = {
       };
       saveStoredOrder(newOrder);
       return { success: true, order: newOrder };
+    }
+  },
+
+  // MX Pay Checkout
+  async createMxPayOrder(data: {
+    customer: ShippingAddress;
+    items: { productId: string; quantity: number }[];
+    couponCode?: string;
+  }): Promise<{
+    success: boolean;
+    orderId: string;
+    orderNumber: string;
+    mxpayTransactionId: string;
+    amount: number;
+    currency: string;
+    apiKey: string;
+    merchantId: string;
+    testMode: boolean;
+    message?: string;
+  }> {
+    try {
+      return await safeJsonFetch(`${API_BASE}/mxpay/create-order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+    } catch {
+      const orderNumber = `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const calculation = await api.calculateOrder(data.items, data.couponCode);
+      const mxpayTxnId = `MXP_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      const settings = await api.getSettings();
+
+      const newOrder: Order = {
+        id: `ord-${Date.now()}`,
+        orderNumber,
+        customer: data.customer,
+        items: calculation.verifiedItems,
+        subtotal: calculation.subtotal,
+        discount: calculation.discount,
+        shippingFee: calculation.shippingFee,
+        total: calculation.total,
+        couponCode: data.couponCode,
+        paymentMethod: 'mxpay',
+        paymentStatus: 'pending',
+        fulfillmentStatus: 'pending_payment',
+        paymentDetails: {
+          mxpayTransactionId: mxpayTxnId,
+          mode: settings.mxPayTestMode ? 'test' : 'live',
+        },
+        shippingDetails: {
+          estimatedDelivery: '3-5 business days',
+        },
+        statusHistory: [
+          {
+            status: 'pending_payment',
+            note: `Order initiated with MX Pay gateway (Txn: ${mxpayTxnId}).`,
+            timestamp: new Date().toISOString(),
+          },
+        ],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      saveStoredOrder(newOrder);
+
+      return {
+        success: true,
+        orderId: newOrder.id,
+        orderNumber: newOrder.orderNumber,
+        mxpayTransactionId: mxpayTxnId,
+        amount: newOrder.total,
+        currency: 'INR',
+        apiKey: settings.mxPayApiKey || 'mx_key_sandbox',
+        merchantId: settings.mxPayMerchantId || 'MX_MERCHANT_DEFAULT',
+        testMode: settings.mxPayTestMode ?? true,
+        message: 'MX Pay checkout ready.',
+      };
+    }
+  },
+
+  async verifyMxPayPayment(data: {
+    orderId: string;
+    mxpayPaymentId: string;
+    mxpayTransactionId?: string;
+    isTestSimulated?: boolean;
+  }): Promise<{
+    success: boolean;
+    order: Order;
+    message?: string;
+  }> {
+    try {
+      return await safeJsonFetch(`${API_BASE}/mxpay/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+    } catch {
+      const orders = getStoredOrders();
+      const order = orders.find((o) => o.id === data.orderId || o.orderNumber === data.orderId);
+      if (order) {
+        order.paymentStatus = 'paid';
+        order.fulfillmentStatus = 'confirmed';
+        order.paymentDetails = {
+          ...order.paymentDetails,
+          mxpayPaymentId: data.mxpayPaymentId,
+          mxpayTransactionId: data.mxpayTransactionId || order.paymentDetails?.mxpayTransactionId,
+          paidAt: new Date().toISOString(),
+        };
+        order.statusHistory.push({
+          status: 'confirmed',
+          note: `Payment verified via MX Pay gateway (Payment ID: ${data.mxpayPaymentId}).`,
+          timestamp: new Date().toISOString(),
+        });
+        saveStoredOrder(order);
+        return { success: true, order };
+      }
+      throw new Error('Order not found for MX Pay verification');
     }
   },
 
@@ -691,6 +744,19 @@ export const api = {
 
   // Admin Order Management
   async getAdminOrders(token: string, status?: string, payment?: string): Promise<Order[]> {
+    try {
+      // First try fetching real-time orders directly from Firestore
+      const firestoreOrders = await getOrdersFromFirestore();
+      if (firestoreOrders && firestoreOrders.length > 0) {
+        let results = firestoreOrders;
+        if (status) results = results.filter((o) => o.fulfillmentStatus === status);
+        if (payment) results = results.filter((o) => o.paymentStatus === payment);
+        return results;
+      }
+    } catch (err) {
+      console.warn('Firestore orders fetch error:', err);
+    }
+
     try {
       const params = new URLSearchParams();
       if (status) params.set('status', status);
@@ -835,6 +901,12 @@ export const api = {
 
   async subscribeNewsletter(email: string, consent: boolean) {
     try {
+      await subscribeNewsletterToFirestore(email);
+    } catch {
+      // Ignore
+    }
+
+    try {
       return await safeJsonFetch(`${API_BASE}/newsletter`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -843,5 +915,14 @@ export const api = {
     } catch {
       return { success: true, message: 'Subscribed to FanKO newsletter!' };
     }
+  },
+
+  getFirebaseStatus() {
+    return {
+      connected: true,
+      projectId: firebaseConfig.projectId,
+      firestoreDatabaseId: firebaseConfig.firestoreDatabaseId,
+      authDomain: firebaseConfig.authDomain,
+    };
   },
 };

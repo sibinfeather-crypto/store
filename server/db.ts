@@ -531,9 +531,10 @@ const initialSettings: StoreSettings = {
   freeShippingThreshold: 499,
   standardShippingFee: 49,
   codEnabled: true,
-  razorpayKeyId: process.env.RAZORPAY_KEY_ID || '',
-  razorpayTestMode: true,
-  hasRazorpaySecret: Boolean(process.env.RAZORPAY_KEY_SECRET),
+  mxPayEnabled: true,
+  mxPayApiKey: process.env.MXPAY_API_KEY || '76D73A7E-B18F8999-9409FA32-A23F5F04-E2DB1357-1262E2D8',
+  mxPayMerchantId: process.env.MXPAY_MERCHANT_ID || 'FANKO_STORE',
+  mxPayTestMode: false,
   currency: 'INR',
 };
 
@@ -725,10 +726,6 @@ class JsonDatabase {
   public getSettings(): StoreSettings {
     return {
       ...this.data.settings,
-      hasRazorpaySecret: Boolean(
-        process.env.RAZORPAY_KEY_SECRET || this.data.settings.hasRazorpaySecret
-      ),
-      razorpayKeyId: process.env.RAZORPAY_KEY_ID || this.data.settings.razorpayKeyId,
     };
   }
 

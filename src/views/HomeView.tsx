@@ -99,7 +99,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
                   <p className="text-[11px]">Free delivery &gt; ₹499</p>
                 </div>
                 <div>
-                  <p className="font-bold text-[#202720] text-sm tabular-nums">Razorpay & COD</p>
+                  <p className="font-bold text-[#202720] text-sm tabular-nums">MX Pay & COD</p>
                   <p className="text-[11px]">Secure checkout</p>
                 </div>
                 <div>
@@ -269,7 +269,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               </div>
               <h3 className="text-sm font-bold text-[#202720]">Secure Payment</h3>
               <p className="text-xs text-[#5E695E] leading-relaxed">
-                100% encrypted online payments via Razorpay (UPI, RuPay, Credit/Debit Cards, NetBanking) and Cash on Delivery.
+                100% encrypted online payments via MX Pay (UPI, QR, RuPay, Cards, NetBanking) and Cash on Delivery.
               </p>
             </div>
 

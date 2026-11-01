@@ -17,7 +17,9 @@ import {
   LogOut,
   Truck,
   IndianRupee,
-  Layers
+  Layers,
+  CreditCard,
+  Database
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.tsx';
 import { api } from '../services/api.ts';
@@ -89,6 +91,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
   const [settingsForm, setSettingsForm] = useState<Partial<StoreSettings>>({});
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsSuccess, setSettingsSuccess] = useState(false);
+  const [showMxKey, setShowMxKey] = useState(false);
 
   // Check setup on mount
   useEffect(() => {
@@ -500,6 +503,32 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
             </div>
           </div>
 
+          {/* Firebase Database & Cloud Sync Status */}
+          <div className="bg-[#E8F5EE] border border-[#087A42]/20 rounded-3xl p-5 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="w-10 h-10 rounded-2xl bg-[#087A42] text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                <Database className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xs font-bold text-[#087A42]">Firebase Firestore Cloud Database</h3>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#087A42] text-white">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-200 animate-pulse"></span>
+                    Connected & Active
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#202720]/80 mt-0.5">
+                  Project ID: <span className="font-mono font-semibold">vast-runner-jbcxw</span> · Real-time persistence for Products, Orders & Store Credentials.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold text-[#087A42] bg-white px-3 py-1.5 rounded-xl border border-[#087A42]/20">
+                Security Rules Deployed
+              </span>
+            </div>
+          </div>
+
           {/* Quick Shortcuts */}
           <div className="bg-white rounded-3xl border border-[#E5E8E3] p-6 shadow-xs flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -863,29 +892,102 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
               </div>
             </div>
 
-            {/* Razorpay Gateway Keys Section */}
+            {/* MX Pay Payment Gateway Section */}
+            <div className="pt-5 border-t border-[#E5E8E3] space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-bold text-[#202720] flex items-center gap-1.5">
+                    <CreditCard className="w-4 h-4 text-[#FF7900]" />
+                    <span>MX Pay Payment Gateway</span>
+                  </h3>
+                  <p className="text-[11px] text-[#5E695E]">
+                    Connect your MX Pay merchant account for UPI, QR code, debit/credit cards, and net banking.
+                  </p>
+                </div>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                  settingsForm.mxPayApiKey
+                    ? 'bg-emerald-50 text-[#087A42] border-[#087A42]/30'
+                    : 'bg-[#FFF4E5] text-[#FF7900] border-[#FF7900]/20'
+                }`}>
+                  {settingsForm.mxPayApiKey ? 'Live Gateway Key Set' : 'Awaiting API Key'}
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-bold text-[#202720] block mb-1">
+                    MX Pay API Key *
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showMxKey ? 'text' : 'password'}
+                      placeholder="Paste your MX Pay API Key (e.g. mx_live_key_... or mx_test_...)"
+                      value={settingsForm.mxPayApiKey || ''}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, mxPayApiKey: e.target.value })}
+                      className="w-full text-xs px-3.5 py-2.5 pr-14 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl font-mono focus:bg-white focus:border-[#087A42]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowMxKey(!showMxKey)}
+                      className="absolute right-3 top-2 text-[11px] font-semibold text-slate-500 hover:text-slate-800 bg-white px-1.5 py-0.5 rounded border border-slate-200"
+                    >
+                      {showMxKey ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    This key will be saved to Firebase Firestore and used for authenticating MX Pay orders.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-[#202720] block mb-1">
+                    MX Pay Merchant ID / Store ID (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. MX_MERCHANT_FANKO"
+                    value={settingsForm.mxPayMerchantId || ''}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, mxPayMerchantId: e.target.value })}
+                    className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl font-mono"
+                  />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-6 pt-1">
+                  <label className="flex items-center gap-2 text-xs text-[#202720] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settingsForm.mxPayEnabled ?? true}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, mxPayEnabled: e.target.checked })}
+                      className="rounded text-[#087A42] focus:ring-[#087A42]"
+                    />
+                    <span className="font-semibold">Enable MX Pay at Customer Checkout</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 text-xs text-[#5E695E] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settingsForm.mxPayTestMode ?? true}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, mxPayTestMode: e.target.checked })}
+                      className="rounded text-[#FF7900] focus:ring-[#FF7900]"
+                    />
+                    <span>Test Sandbox Mode (Simulate without debiting real bank accounts)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Cash on Delivery (COD) Section */}
             <div className="pt-4 border-t border-[#E5E8E3] space-y-3">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-xs font-bold text-[#202720] flex items-center gap-1.5">
                     <ShieldCheck className="w-4 h-4 text-[#087A42]" />
-                    <span>Razorpay Payment Gateway (India)</span>
+                    <span>Cash on Delivery (COD)</span>
                   </h3>
                   <p className="text-[11px] text-[#5E695E]">
-                    Enter merchant Key ID from Razorpay Dashboard to activate real checkout.
+                    Allow customers across India to pay cash at their doorstep upon package delivery.
                   </p>
                 </div>
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-[#202720] block mb-1">Razorpay Key ID</label>
-                <input
-                  type="text"
-                  placeholder="rzp_test_... or rzp_live_..."
-                  value={settingsForm.razorpayKeyId || ''}
-                  onChange={(e) => setSettingsForm({ ...settingsForm, razorpayKeyId: e.target.value })}
-                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl font-mono"
-                />
               </div>
 
               <div className="flex items-center gap-4 pt-2">

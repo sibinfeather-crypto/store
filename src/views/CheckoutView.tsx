@@ -8,7 +8,10 @@ import {
   AlertCircle,
   Lock,
   Tag,
-  Info
+  Info,
+  QrCode,
+  Smartphone,
+  Building2
 } from 'lucide-react';
 import { useCart } from '../context/CartContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
@@ -38,23 +41,40 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     pincode: customer?.savedAddresses[0]?.pincode || '',
   });
 
-  const [paymentMethod, setPaymentMethod] = useState<'razorpay' | 'cod'>('razorpay');
+  const [paymentMethod, setPaymentMethod] = useState<'mxpay' | 'cod'>('mxpay');
   const [codAllowed, setCodAllowed] = useState(true);
+  const [mxPayAllowed, setMxPayAllowed] = useState(true);
   const [saveInfo, setSaveInfo] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Sandbox simulation modal state when merchant keys are in test mode
-  const [testModalData, setTestModalData] = useState<{
+  // MX Pay Gateway Checkout Modal State
+  const [mxPayModalData, setMxPayModalData] = useState<{
     orderId: string;
     orderNumber: string;
-    razorpayOrderId: string;
+    transactionId: string;
     amount: number;
+    apiKey: string;
+    merchantId: string;
+    testMode: boolean;
   } | null>(null);
+  const [mxPayTab, setMxPayTab] = useState<'upi' | 'card' | 'netbanking'>('upi');
+  const [selectedUpiApp, setSelectedUpiApp] = useState<'gpay' | 'phonepe' | 'paytm' | 'bhim'>('gpay');
+  const [upiVpa, setUpiVpa] = useState('');
+  const [cardNumber, setCardNumber] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvv, setCardCvv] = useState('');
+  const [selectedBank, setSelectedBank] = useState('HDFC Bank');
 
   useEffect(() => {
     api.getSettings().then((s) => {
       setCodAllowed(s.codEnabled);
+      setMxPayAllowed(s.mxPayEnabled ?? true);
+      if (s.mxPayEnabled !== false) {
+        setPaymentMethod('mxpay');
+      } else {
+        setPaymentMethod('cod');
+      }
     }).catch(() => {});
   }, []);
 
@@ -139,110 +159,61 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         return;
       }
 
-      // B. Razorpay Online Payment Flow
-      const rzpInit = await api.createRazorpayOrder({
-        customer: form,
-        items: payloadItems,
-        couponCode: couponCode || undefined,
-      });
-
-      // Check if real Razorpay is openable via checkout.js
-      if ((window as any).Razorpay && !rzpInit.testMode && rzpInit.keyId !== 'rzp_test_placeholder') {
-        const options = {
-          key: rzpInit.keyId,
-          amount: rzpInit.amount,
-          currency: rzpInit.currency,
-          name: 'FanKO Store',
-          description: `Order ${rzpInit.orderNumber}`,
-          image: '/assets/aistudio/fankostore.logo_1f90e1f5.png',
-          order_id: rzpInit.razorpayOrderId,
-          prefill: {
-            name: form.fullName,
-            email: form.email,
-            contact: form.phone,
-          },
-          notes: {
-            orderNumber: rzpInit.orderNumber,
-          },
-          theme: {
-            color: '#087A42',
-          },
-          handler: async function (response: any) {
-            try {
-              const verifyRes = await api.verifyRazorpayPayment({
-                orderId: rzpInit.orderId,
-                razorpayOrderId: response.razorpay_order_id,
-                razorpayPaymentId: response.razorpay_payment_id,
-                razorpaySignature: response.razorpay_signature,
-              });
-              clearCart();
-              setIsProcessing(false);
-              onOrderCompleted(verifyRes.order);
-              onNavigate('order-confirmation', verifyRes.order.orderNumber);
-            } catch (err: any) {
-              setIsProcessing(false);
-              setError(err.message || 'Payment signature verification failed.');
-            }
-          },
-          modal: {
-            ondismiss: function () {
-              setIsProcessing(false);
-              setError('Payment window closed. Your order was not charged. You can retry anytime.');
-            },
-          },
-        };
-
-        const razorpayInstance = new (window as any).Razorpay(options);
-        razorpayInstance.on('payment.failed', function (resp: any) {
-          setIsProcessing(false);
-          setError(`Payment failed: ${resp.error.description || 'Transaction declined'}`);
+      // B. MX Pay Gateway Flow
+      if (paymentMethod === 'mxpay') {
+        const mxInit = await api.createMxPayOrder({
+          customer: form,
+          items: payloadItems,
+          couponCode: couponCode || undefined,
         });
-        razorpayInstance.open();
-      } else {
-        // Test / Sandbox mode dialog (Transparently explains test mode)
         setIsProcessing(false);
-        setTestModalData({
-          orderId: rzpInit.orderId,
-          orderNumber: rzpInit.orderNumber,
-          razorpayOrderId: rzpInit.razorpayOrderId,
-          amount: rzpInit.amount,
+        setMxPayModalData({
+          orderId: mxInit.orderId,
+          orderNumber: mxInit.orderNumber,
+          transactionId: mxInit.mxpayTransactionId,
+          amount: mxInit.amount,
+          apiKey: mxInit.apiKey,
+          merchantId: mxInit.merchantId,
+          testMode: mxInit.testMode,
         });
+        return;
       }
+
     } catch (err: any) {
       setIsProcessing(false);
       setError(err.message || 'Failed to place order. Please check inputs and try again.');
     }
   };
 
-  // Handler for Sandbox Test Payment simulation
-  const handleSimulateTestPayment = async (success: boolean) => {
-    if (!testModalData) return;
+  // Handler for MX Pay payment authorization
+  const handleCompleteMxPayment = async (success: boolean) => {
+    if (!mxPayModalData) return;
     setIsProcessing(true);
 
     if (!success) {
       setIsProcessing(false);
-      setTestModalData(null);
-      setError('Simulated payment was cancelled / declined. No amount charged.');
+      setMxPayModalData(null);
+      setError('MX Pay transaction was cancelled. No amount was debited.');
       return;
     }
 
     try {
-      const mockPaymentId = `pay_test_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-      const verifyRes = await api.verifyRazorpayPayment({
-        orderId: testModalData.orderId,
-        razorpayOrderId: testModalData.razorpayOrderId,
-        razorpayPaymentId: mockPaymentId,
-        isTestSimulated: true,
+      const mockPaymentId = `mx_pay_${Date.now()}_${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+      const verifyRes = await api.verifyMxPayPayment({
+        orderId: mxPayModalData.orderId,
+        mxpayPaymentId: mockPaymentId,
+        mxpayTransactionId: mxPayModalData.transactionId,
+        isTestSimulated: mxPayModalData.testMode,
       });
 
       clearCart();
       setIsProcessing(false);
-      setTestModalData(null);
+      setMxPayModalData(null);
       onOrderCompleted(verifyRes.order);
       onNavigate('order-confirmation', verifyRes.order.orderNumber);
     } catch (err: any) {
       setIsProcessing(false);
-      setError(err.message || 'Payment verification failed');
+      setError(err.message || 'MX Pay verification failed. Please try again.');
     }
   };
 
@@ -432,35 +403,42 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
             </div>
 
             <div className="space-y-3">
-              {/* Option A: Razorpay Online Payment */}
-              <label
-                className={`p-4 rounded-2xl border-2 cursor-pointer flex items-start gap-3.5 transition-all ${
-                  paymentMethod === 'razorpay'
-                    ? 'border-[#087A42] bg-[#E8F5EE]/40'
-                    : 'border-[#E5E8E3] hover:border-slate-300'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="payment"
-                  checked={paymentMethod === 'razorpay'}
-                  onChange={() => setPaymentMethod('razorpay')}
-                  className="mt-1 text-[#087A42] focus:ring-[#087A42]"
-                />
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold text-[#202720]">
-                      Razorpay Online Payment (UPI, Cards, NetBanking, Wallets)
+              {/* Option A: MX Pay Payment Gateway */}
+              {mxPayAllowed && (
+                <label
+                  className={`p-4 rounded-2xl border-2 cursor-pointer flex items-start gap-3.5 transition-all ${
+                    paymentMethod === 'mxpay'
+                      ? 'border-[#087A42] bg-[#E8F5EE]/40'
+                      : 'border-[#E5E8E3] hover:border-slate-300'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="payment"
+                    checked={paymentMethod === 'mxpay'}
+                    onChange={() => setPaymentMethod('mxpay')}
+                    className="mt-1 text-[#087A42] focus:ring-[#087A42]"
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded bg-[#FF7900] text-white flex items-center justify-center font-black text-[10px]">
+                          MX
+                        </span>
+                        <p className="text-xs font-bold text-[#202720]">
+                          MX Pay Gateway (UPI, QR Code, Cards, NetBanking)
+                        </p>
+                      </div>
+                      <span className="text-[11px] font-semibold text-[#087A42] bg-white px-2 py-0.5 rounded border border-[#087A42]/30">
+                        Instant Checkout
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-[#5E695E] mt-1 leading-relaxed">
+                      Pay instantly with Google Pay, PhonePe, Paytm, BHIM UPI, debit/credit cards, or NetBanking.
                     </p>
-                    <span className="text-[11px] font-semibold text-[#087A42] bg-white px-2 py-0.5 rounded border border-[#E5E8E3]">
-                      Recommended
-                    </span>
                   </div>
-                  <p className="text-[11px] text-[#5E695E] mt-1 leading-relaxed">
-                    Pay securely using Google Pay, PhonePe, Paytm, RuPay, Visa, Mastercard, or Indian NetBanking.
-                  </p>
-                </div>
-              </label>
+                </label>
+              )}
 
               {/* Option B: Cash on Delivery (COD) */}
               {codAllowed && (
@@ -508,7 +486,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                   ? 'Processing Order...'
                   : paymentMethod === 'cod'
                   ? `Confirm Order with Cash on Delivery (₹${total})`
-                  : `Pay ₹${total} via Razorpay`}
+                  : `Proceed to MX Pay · ₹${total}`}
               </span>
             </button>
           </div>
@@ -589,66 +567,228 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       </div>
 
       {/* Test / Sandbox Gateway Simulation Modal */}
-      {testModalData && (
+
+
+      {/* MX Pay Payment Gateway Modal */}
+      {mxPayModalData && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 space-y-5 shadow-2xl border border-[#E5E8E3] animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 space-y-5 shadow-2xl border border-[#E5E8E3] animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
             <div className="flex items-center justify-between pb-3 border-b border-[#E5E8E3]">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-[#087A42] text-white flex items-center justify-center font-bold text-xs">
-                  ₹
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#FF7900] text-white flex items-center justify-center font-black text-xs shadow-xs">
+                  MX
                 </div>
-                <h3 className="text-sm font-bold text-[#202720]">
-                  Razorpay Standard Checkout (Sandbox)
-                </h3>
+                <div>
+                  <h3 className="text-sm font-bold text-[#202720] flex items-center gap-1.5">
+                    <span>MX Pay Payment Gateway</span>
+                    <ShieldCheck className="w-4 h-4 text-[#087A42]" />
+                  </h3>
+                  <p className="text-[10px] text-[#5E695E]">FanKO Store Verified Merchant Checkout</p>
+                </div>
               </div>
-              <span className="text-[10px] bg-[#FFF4E5] text-[#FF7900] font-bold px-2 py-0.5 rounded-full border border-[#FF7900]/20">
-                Test Mode
+              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                mxPayModalData.testMode
+                  ? 'bg-[#FFF4E5] text-[#FF7900] border-[#FF7900]/20'
+                  : 'bg-emerald-50 text-[#087A42] border-[#087A42]/30'
+              }`}>
+                {mxPayModalData.testMode ? 'Sandbox Mode' : 'Live Gateway'}
               </span>
             </div>
 
-            <div className="p-3 bg-[#F7F8F6] rounded-xl space-y-1 text-xs">
+            {/* Order & Gateway Details */}
+            <div className="p-3.5 bg-[#F7F8F6] rounded-2xl space-y-1.5 text-xs">
               <div className="flex justify-between text-[#5E695E]">
-                <span>Order Number:</span>
-                <span className="font-mono font-semibold text-[#202720]">{testModalData.orderNumber}</span>
+                <span>Order Reference:</span>
+                <span className="font-mono font-bold text-[#202720]">{mxPayModalData.orderNumber}</span>
               </div>
               <div className="flex justify-between text-[#5E695E]">
-                <span>Razorpay Order ID:</span>
-                <span className="font-mono text-[11px] text-[#202720]">{testModalData.razorpayOrderId}</span>
+                <span>Transaction Ref:</span>
+                <span className="font-mono text-[11px] text-[#202720]">{mxPayModalData.transactionId}</span>
               </div>
-              <div className="flex justify-between text-sm font-bold text-[#202720] pt-1 border-t border-[#E5E8E3]">
-                <span>Amount:</span>
-                <span className="text-[#087A42] tabular-nums">₹{testModalData.amount / 100}</span>
+              <div className="flex justify-between text-[#5E695E]">
+                <span>Configured API Key:</span>
+                <span className="font-mono text-[11px] text-[#087A42] font-semibold">
+                  {mxPayModalData.apiKey && mxPayModalData.apiKey !== 'mx_key_sandbox'
+                    ? `${mxPayModalData.apiKey.slice(0, 10)}••••••••`
+                    : 'Awaiting User Key (Sandbox Active)'}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm font-extrabold text-[#202720] pt-2 border-t border-[#E5E8E3]">
+                <span>Total Payable:</span>
+                <span className="text-base text-[#087A42] tabular-nums">₹{mxPayModalData.amount}</span>
               </div>
             </div>
 
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-800 space-y-1">
-              <div className="flex items-center gap-1.5 font-bold">
-                <Info className="w-3.5 h-3.5 text-blue-600" />
-                <span>Test Gateway Demonstration</span>
+            {/* Payment Method Selector Tabs */}
+            <div className="space-y-3">
+              <div className="grid grid-cols-3 gap-1.5 bg-[#F7F8F6] p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setMxPayTab('upi')}
+                  className={`py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    mxPayTab === 'upi' ? 'bg-white text-[#087A42] shadow-xs' : 'text-[#5E695E] hover:text-[#202720]'
+                  }`}
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>UPI / QR</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMxPayTab('card')}
+                  className={`py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    mxPayTab === 'card' ? 'bg-white text-[#087A42] shadow-xs' : 'text-[#5E695E] hover:text-[#202720]'
+                  }`}
+                >
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>Cards</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMxPayTab('netbanking')}
+                  className={`py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    mxPayTab === 'netbanking' ? 'bg-white text-[#087A42] shadow-xs' : 'text-[#5E695E] hover:text-[#202720]'
+                  }`}
+                >
+                  <Building2 className="w-3.5 h-3.5" />
+                  <span>NetBanking</span>
+                </button>
               </div>
-              <p className="text-[11px] text-blue-700 leading-relaxed">
-                Live keys are configured via Admin Settings or <code className="font-mono bg-blue-100 px-1 rounded">.env</code>. This sandbox allows you to test both verified success and cancellation states end-to-end.
-              </p>
+
+              {/* Tab 1: UPI & QR Code */}
+              {mxPayTab === 'upi' && (
+                <div className="space-y-3 pt-1">
+                  <div className="flex flex-col sm:flex-row items-center gap-4 p-3.5 bg-white border border-[#E5E8E3] rounded-2xl">
+                    <div className="w-24 h-24 bg-[#F7F8F6] border-2 border-dashed border-[#087A42]/40 rounded-xl flex flex-col items-center justify-center p-2 text-center shrink-0">
+                      <QrCode className="w-12 h-12 text-[#087A42]" />
+                      <span className="text-[9px] font-bold text-[#087A42] mt-0.5">Scan UPI QR</span>
+                    </div>
+                    <div className="space-y-1.5 text-center sm:text-left flex-1">
+                      <p className="text-xs font-bold text-[#202720]">Instant UPI Payment</p>
+                      <p className="text-[11px] text-[#5E695E]">
+                        Open any UPI app on your phone to scan or tap an app:
+                      </p>
+                      <div className="flex flex-wrap gap-1.5 pt-1 justify-center sm:justify-start">
+                        {(['gpay', 'phonepe', 'paytm', 'bhim'] as const).map((app) => (
+                          <button
+                            key={app}
+                            type="button"
+                            onClick={() => setSelectedUpiApp(app)}
+                            className={`text-[10px] font-semibold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                              selectedUpiApp === app
+                                ? 'bg-[#087A42] text-white border-[#087A42]'
+                                : 'bg-[#F7F8F6] text-[#202720] border-[#E5E8E3] hover:border-slate-400'
+                            }`}
+                          >
+                            {app.toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-[#202720] block mb-1">Or enter UPI ID / VPA</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. yourname@okhdfcbank or mobile@upi"
+                      value={upiVpa}
+                      onChange={(e) => setUpiVpa(e.target.value)}
+                      className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42]"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: Credit / Debit Card */}
+              {mxPayTab === 'card' && (
+                <div className="space-y-2.5 pt-1">
+                  <div>
+                    <label className="text-xs font-bold text-[#202720] block mb-1">Card Number</label>
+                    <input
+                      type="text"
+                      placeholder="4532 •••• •••• 1042"
+                      value={cardNumber}
+                      onChange={(e) => setCardNumber(e.target.value)}
+                      maxLength={19}
+                      className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl font-mono focus:bg-white focus:border-[#087A42]"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-[#202720] block mb-1">Expiry (MM/YY)</label>
+                      <input
+                        type="text"
+                        placeholder="12/28"
+                        value={cardExpiry}
+                        onChange={(e) => setCardExpiry(e.target.value)}
+                        maxLength={5}
+                        className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-[#202720] block mb-1">CVV</label>
+                      <input
+                        type="password"
+                        placeholder="•••"
+                        value={cardCvv}
+                        onChange={(e) => setCardCvv(e.target.value)}
+                        maxLength={4}
+                        className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 3: NetBanking */}
+              {mxPayTab === 'netbanking' && (
+                <div className="space-y-2.5 pt-1">
+                  <label className="text-xs font-bold text-[#202720] block mb-1">Select Bank</label>
+                  <select
+                    value={selectedBank}
+                    onChange={(e) => setSelectedBank(e.target.value)}
+                    className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl font-semibold text-[#202720]"
+                  >
+                    <option value="HDFC Bank">HDFC Bank</option>
+                    <option value="State Bank of India">State Bank of India (SBI)</option>
+                    <option value="ICICI Bank">ICICI Bank</option>
+                    <option value="Axis Bank">Axis Bank</option>
+                    <option value="Kotak Mahindra Bank">Kotak Mahindra Bank</option>
+                    <option value="Punjab National Bank">Punjab National Bank</option>
+                  </select>
+                </div>
+              )}
             </div>
 
+            {/* Actions */}
             <div className="space-y-2 pt-2">
               <button
-                onClick={() => handleSimulateTestPayment(true)}
+                type="button"
+                onClick={() => handleCompleteMxPayment(true)}
                 disabled={isProcessing}
-                className="w-full py-3 bg-[#087A42] hover:bg-[#066336] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                className="w-full py-3.5 bg-[#087A42] hover:bg-[#066336] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"
               >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>{isProcessing ? 'Verifying on Backend...' : 'Simulate Successful Payment (Verify Signature)'}</span>
+                <CheckCircle2 className="w-4 h-4 text-emerald-200" />
+                <span>
+                  {isProcessing ? 'Verifying with MX Pay...' : `Authorize & Pay ₹${mxPayModalData.amount} via MX Pay`}
+                </span>
               </button>
 
               <button
-                onClick={() => handleSimulateTestPayment(false)}
+                type="button"
+                onClick={() => handleCompleteMxPayment(false)}
                 disabled={isProcessing}
                 className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
               >
-                Simulate Payment Cancel / Decline
+                Cancel / Return to Cart
               </button>
             </div>
+
+            <p className="text-[10px] text-center text-slate-400 flex items-center justify-center gap-1 pt-1">
+              <Lock className="w-3 h-3 text-[#087A42]" />
+              <span>256-Bit Bank Grade SSL Encrypted Checkout via MX Pay</span>
+            </p>
           </div>
         </div>
       )}

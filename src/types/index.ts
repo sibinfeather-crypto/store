@@ -84,7 +84,7 @@ export type OrderFulfillmentStatus =
   | 'refunded';
 
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';
-export type PaymentMethod = 'razorpay' | 'cod';
+export type PaymentMethod = 'mxpay' | 'cod';
 
 export interface OrderItem {
   productId: string;
@@ -128,6 +128,9 @@ export interface Order {
     razorpayOrderId?: string;
     razorpayPaymentId?: string;
     razorpaySignature?: string;
+    mxpayTransactionId?: string;
+    mxpayPaymentId?: string;
+    mxpayStatus?: string;
     paidAt?: string;
     mode?: 'live' | 'test' | 'cod';
   };
@@ -175,9 +178,11 @@ export interface StoreSettings {
   freeShippingThreshold: number;
   standardShippingFee: number;
   codEnabled: boolean;
-  razorpayKeyId: string;
-  razorpayTestMode: boolean;
-  hasRazorpaySecret: boolean;
+  mxPayEnabled?: boolean;
+  mxPayApiKey?: string;
+  mxPayMerchantId?: string;
+  mxPaySecretKey?: string;
+  mxPayTestMode?: boolean;
   currency: string;
 }
 

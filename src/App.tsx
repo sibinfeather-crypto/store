@@ -184,14 +184,16 @@ export default function App() {
       api.getSettings(),
     ])
       .then(([prods, cats, settings]) => {
-        setProducts(prods);
-        setCategories(cats);
+        setProducts(prods && prods.length > 0 ? prods : defaultProducts);
+        setCategories(cats && cats.length > 0 ? cats : defaultCategories);
         if (settings.whatsappNumber) setWhatsappNumber(settings.whatsappNumber);
         if (settings.supportEmail) setSupportEmail(settings.supportEmail);
         setLoading(false);
       })
       .catch((err) => {
         console.error('Failed to load initial store data:', err);
+        setProducts(defaultProducts);
+        setCategories(defaultCategories);
         setLoading(false);
       });
   }, []);
