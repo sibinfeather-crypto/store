@@ -3,7 +3,6 @@ import {
   Search,
   ShoppingBag,
   Heart,
-  User,
   Menu,
   X,
   Package,
@@ -260,19 +259,18 @@ export const Header: React.FC<HeaderProps> = ({ currentView, currentParam = '', 
               )}
             </button>
 
-            {/* Account / Admin Trigger */}
+            {/* Direct Admin Portal Button */}
             <button
-              onClick={() => onNavigate(isAdminLoggedIn ? 'admin' : 'account')}
-              className="p-2 text-[#202720] hover:text-[#087A42] rounded-full hover:bg-[#F7F8F6] transition-colors hidden sm:flex items-center gap-1.5"
-              aria-label="My Account"
-              title={isAdminLoggedIn ? 'Admin Dashboard' : 'My Account'}
+              onClick={() => onNavigate('admin')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                currentView === 'admin'
+                  ? 'bg-[#087A42] text-white shadow-xs'
+                  : 'bg-[#FFF4E5] hover:bg-[#FFE8CC] text-[#FF7900] border border-[#FF7900]/30 shadow-xs'
+              }`}
+              title="Open Admin Portal"
             >
-              <User className="w-5 h-5" />
-              {isAdminLoggedIn && (
-                <span className="text-[10px] bg-[#E8F5EE] text-[#087A42] font-semibold px-1.5 py-0.5 rounded">
-                  Admin
-                </span>
-              )}
+              <ShieldCheck className="w-3.5 h-3.5" />
+              <span>Admin</span>
             </button>
           </div>
         </div>
@@ -379,16 +377,6 @@ export const Header: React.FC<HeaderProps> = ({ currentView, currentParam = '', 
                   >
                     <Package className="w-4 h-4 text-[#087A42]" />
                     <span>Track Your Order</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      onNavigate('account');
-                      setMobileMenuOpen(false);
-                    }}
-                    className="w-full flex items-center gap-2.5 py-2.5 px-3 rounded-lg text-sm text-[#202720] hover:bg-[#F7F8F6]"
-                  >
-                    <User className="w-4 h-4 text-[#087A42]" />
-                    <span>My Account / Orders</span>
                   </button>
                   <button
                     onClick={() => {

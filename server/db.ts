@@ -535,6 +535,8 @@ const initialSettings: StoreSettings = {
   upiEnabled: true,
   upiId: 'fankostore@okhdfcbank',
   upiPayeeName: 'FanKO Store',
+  customUpiQrUrl: '',
+  upiQrMode: 'dynamic',
   currency: 'INR',
 };
 
@@ -731,6 +733,8 @@ class JsonDatabase {
       upiEnabled: this.data.settings.upiEnabled ?? true,
       upiId: this.data.settings.upiId || 'fankostore@okhdfcbank',
       upiPayeeName: this.data.settings.upiPayeeName || 'FanKO Store',
+      customUpiQrUrl: this.data.settings.customUpiQrUrl || '',
+      upiQrMode: this.data.settings.upiQrMode || 'dynamic',
     };
   }
 

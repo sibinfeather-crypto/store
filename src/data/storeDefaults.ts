@@ -406,6 +406,8 @@ export const defaultSettings: StoreSettings = {
   upiEnabled: true,
   upiId: 'fankostore@okhdfcbank',
   upiPayeeName: 'FanKO Store',
+  customUpiQrUrl: '',
+  upiQrMode: 'dynamic',
   currency: 'INR',
 };
 

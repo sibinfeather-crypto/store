@@ -56,6 +56,8 @@ app.get('/api/settings', (_req, res) => {
     upiEnabled: settings.upiEnabled ?? true,
     upiId: settings.upiId || 'fankostore@okhdfcbank',
     upiPayeeName: settings.upiPayeeName || 'FanKO Store',
+    customUpiQrUrl: settings.customUpiQrUrl || '',
+    upiQrMode: settings.upiQrMode || 'dynamic',
     currency: settings.currency,
   });
 });
@@ -122,7 +124,26 @@ app.get('/api/products/:idOrSlug', (req, res) => {
 });
 
 app.post('/api/products', requireAdmin, (req, res) => {
-  const { name, category, price, salePrice, stock, sku, description, shortDescription, specifications, dimensions, material, images, isIncomplete, incompleteNotes } = req.body;
+  const {
+    name,
+    category,
+    subCategory,
+    price,
+    salePrice,
+    stock,
+    sku,
+    description,
+    shortDescription,
+    specifications,
+    dimensions,
+    material,
+    shippingInfo,
+    images,
+    isIncomplete,
+    incompleteNotes,
+    featured,
+    isNewArrival,
+  } = req.body;
   if (!name || !category || price == null) {
     return res.status(400).json({ error: 'Product name, category, and price are required.' });
   }
@@ -138,6 +159,7 @@ app.post('/api/products', requireAdmin, (req, res) => {
     name,
     sku: sku || `FKO-${Date.now().toString().slice(-4)}`,
     category,
+    subCategory: subCategory || '',
     description: description || '',
     shortDescription: shortDescription || description?.slice(0, 120) || '',
     price: Number(price),
@@ -148,11 +170,11 @@ app.post('/api/products', requireAdmin, (req, res) => {
     specifications: specifications || {},
     dimensions: dimensions || '',
     material: material || '',
-    shippingInfo: 'Standard 3-5 business days pan-India delivery.',
+    shippingInfo: shippingInfo || 'Standard 3-5 business days pan-India delivery.',
     isIncomplete: Boolean(isIncomplete),
     incompleteNotes: incompleteNotes || '',
-    featured: false,
-    isNewArrival: true,
+    featured: Boolean(featured),
+    isNewArrival: isNewArrival !== undefined ? Boolean(isNewArrival) : true,
     rating: 0,
     reviewCount: 0,
     createdAt: new Date().toISOString(),
@@ -442,6 +464,11 @@ app.post('/api/upi/generate-intent', (req, res) => {
     orderNumber,
   });
 
+  const finalQrCodeUrl =
+    settings.upiQrMode === 'custom' && settings.customUpiQrUrl
+      ? settings.customUpiQrUrl
+      : urls.qrCodeUrl;
+
   res.json({
     success: true,
     upiId,
@@ -449,6 +476,8 @@ app.post('/api/upi/generate-intent', (req, res) => {
     amount: payAmount,
     orderNumber,
     ...urls,
+    qrCodeUrl: finalQrCodeUrl,
+    customQrActive: settings.upiQrMode === 'custom' && Boolean(settings.customUpiQrUrl),
   });
 });
 

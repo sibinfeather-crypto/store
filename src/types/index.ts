@@ -190,6 +190,8 @@ export interface StoreSettings {
   upiEnabled: boolean;
   upiId: string;
   upiPayeeName: string;
+  customUpiQrUrl?: string;
+  upiQrMode?: 'dynamic' | 'custom';
   currency: string;
   mxPayEnabled?: boolean;
   mxPayApiKey?: string;

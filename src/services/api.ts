@@ -512,6 +512,7 @@ export const api = {
     phonepeUri: string;
     paytmUri: string;
     qrCodeUrl: string;
+    customQrActive?: boolean;
   }> {
     try {
       return await safeJsonFetch(`${API_BASE}/upi/generate-intent`, {
@@ -526,6 +527,8 @@ export const api = {
       const orderNumber = data.orderRef || `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
       const note = encodeURIComponent(`Order ${orderNumber}`);
       const baseQuery = `pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${data.amount}&cu=INR&tn=${note}`;
+      const defaultQr = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=10&data=${encodeURIComponent(`upi://pay?${baseQuery}`)}`;
+      const finalQr = settings.upiQrMode === 'custom' && settings.customUpiQrUrl ? settings.customUpiQrUrl : defaultQr;
 
       return {
         success: true,
@@ -537,7 +540,8 @@ export const api = {
         gpayUri: `gpay://upi/pay?${baseQuery}`,
         phonepeUri: `phonepe://pay?${baseQuery}`,
         paytmUri: `paytmmp://pay?${baseQuery}`,
-        qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=10&data=${encodeURIComponent(`upi://pay?${baseQuery}`)}`,
+        qrCodeUrl: finalQr,
+        customQrActive: settings.upiQrMode === 'custom' && Boolean(settings.customUpiQrUrl),
       };
     }
   },

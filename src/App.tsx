@@ -21,7 +21,6 @@ import { CheckoutView } from './views/CheckoutView.tsx';
 import { OrderConfirmationView } from './views/OrderConfirmationView.tsx';
 import { TrackOrderView } from './views/TrackOrderView.tsx';
 import { WishlistView } from './views/WishlistView.tsx';
-import { AccountView } from './views/AccountView.tsx';
 import { AdminDashboardView } from './views/AdminDashboardView.tsx';
 import { StaticPages } from './views/StaticPages.tsx';
 
@@ -82,7 +81,7 @@ function parseUrlToRoute(pathname: string, search: string): { view: string; para
     return { view: 'track-order', param: num };
   }
   if (cleanPath === '/wishlist') return { view: 'wishlist', param: '' };
-  if (cleanPath === '/account') return { view: 'account', param: '' };
+  if (cleanPath === '/account') return { view: 'track-order', param: '' };
   if (cleanPath === '/admin') return { view: 'admin', param: '' };
   if (cleanPath === '/about') return { view: 'about', param: '' };
   if (cleanPath === '/contact') return { view: 'contact', param: '' };
@@ -141,8 +140,6 @@ function getUrlForRoute(view: string, param = ''): { path: string; title: string
       return { path: param ? `/track-order/${param}` : '/track-order', title: 'Track Order | FanKO Store' };
     case 'wishlist':
       return { path: '/wishlist', title: 'My Wishlist | FanKO Store' };
-    case 'account':
-      return { path: '/account', title: 'My Account & Orders | FanKO Store' };
     case 'admin':
       return { path: '/admin', title: 'Admin Dashboard | FanKO Store' };
     case 'about':
@@ -351,10 +348,6 @@ export default function App() {
 
                   {currentView === 'wishlist' && (
                     <WishlistView onNavigate={navigateTo} />
-                  )}
-
-                  {currentView === 'account' && (
-                    <AccountView onNavigate={navigateTo} />
                   )}
 
                   {currentView === 'admin' && (

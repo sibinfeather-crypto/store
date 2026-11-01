@@ -16,18 +16,10 @@ import {
 import { getAuth } from 'firebase/auth';
 import type { Product, Order, StoreSettings, Review } from './types/index.ts';
 
+import firebaseAppletConfig from '../firebase-applet-config.json';
+
 // Firebase configuration provisioned for FanKO Store
-export const firebaseConfig = {
-  projectId: "vast-runner-jbcxw",
-  appId: "1:969072175873:web:2db2432be5b0fcc1c6c900",
-  apiKey: "AIzaSyB8ZBp_ke1cMkKAfzwWgUf0gtyWLxLIddw",
-  authDomain: "vast-runner-jbcxw.firebaseapp.com",
-  firestoreDatabaseId: "ai-studio-fankostoresmartp-38947663-ac52-4352-b281-32a5cd48fa82",
-  storageBucket: "vast-runner-jbcxw.firebasestorage.app",
-  messagingSenderId: "969072175873",
-  measurementId: "",
-  oAuthClientId: "969072175873-i4alr394rnilvhs7f3j05tff3brhthi2.apps.googleusercontent.com",
-};
+export const firebaseConfig = firebaseAppletConfig;
 
 // Initialize Firebase App
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
