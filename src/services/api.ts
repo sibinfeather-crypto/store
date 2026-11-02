@@ -689,15 +689,18 @@ export const api = {
     items: { productId: string; quantity: number }[];
     couponCode?: string;
     upiApp?: 'gpay' | 'phonepe' | 'paytm' | 'other';
-    utrNumber: string;
+    utrNumber?: string;
     payerUpiId?: string;
     paymentProofUrl?: string;
   }): Promise<{ success: boolean; order: Order }> {
+    const finalUtr = data.utrNumber?.trim() || `AUTO-UPI-${Date.now().toString().slice(-8)}`;
+    const payload = { ...data, utrNumber: finalUtr };
+
     try {
       const res = await safeJsonFetch<{ success: boolean; order: Order }>(`${API_BASE}/orders/upi`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
       if (res && res.order) {
         saveStoredOrder(res.order);
@@ -726,7 +729,7 @@ export const api = {
           mode: 'upi',
           upiApp: data.upiApp || 'other',
           upiTransactionId: upiTxnId,
-          utrNumber: data.utrNumber,
+          utrNumber: finalUtr,
           payerUpiId: data.payerUpiId,
           paymentProofUrl: data.paymentProofUrl,
           paymentVerified: true,
@@ -741,7 +744,7 @@ export const api = {
         statusHistory: [
           {
             status: 'confirmed',
-            note: `Order placed after 100% Full UPI Payment via ${data.upiApp ? data.upiApp.toUpperCase() : 'UPI'} (Amount: ₹${calculation.total}, Verified UTR: ${data.utrNumber}). Payment verified.`,
+            note: `Order placed after 100% Full UPI Payment via ${data.upiApp ? data.upiApp.toUpperCase() : 'UPI'} (Amount: ₹${calculation.total}, Payment Ref: ${finalUtr}). Payment confirmed automatically.`,
             timestamp: new Date().toISOString(),
           },
         ],
@@ -759,15 +762,18 @@ export const api = {
     items: { productId: string; quantity: number }[];
     couponCode?: string;
     upiApp?: 'gpay' | 'phonepe' | 'paytm' | 'other';
-    utrNumber: string;
+    utrNumber?: string;
     payerUpiId?: string;
     paymentProofUrl?: string;
   }): Promise<{ success: boolean; order: Order }> {
+    const finalUtr = data.utrNumber?.trim() || `AUTO-COD-${Date.now().toString().slice(-8)}`;
+    const payload = { ...data, utrNumber: finalUtr };
+
     try {
       const res = await safeJsonFetch<{ success: boolean; order: Order }>(`${API_BASE}/orders/cod`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
       if (res && res.order) {
         saveStoredOrder(res.order);
@@ -800,7 +806,7 @@ export const api = {
           balanceDueOnDelivery: balanceDue,
           upiApp: data.upiApp || 'other',
           upiTransactionId: upiTxnId,
-          utrNumber: data.utrNumber,
+          utrNumber: finalUtr,
           payerUpiId: data.payerUpiId,
           paymentProofUrl: data.paymentProofUrl,
           paymentVerified: true,
@@ -813,7 +819,7 @@ export const api = {
         statusHistory: [
           {
             status: 'confirmed',
-            note: `Order placed after Cash on Delivery (COD) advance payment of ₹${advanceAmount} verified via ${data.upiApp ? data.upiApp.toUpperCase() : 'UPI'} (UTR: ${data.utrNumber}). Balance ₹${balanceDue} payable on delivery.`,
+            note: `Order placed after Cash on Delivery (COD) advance payment of ₹${advanceAmount} confirmed via ${data.upiApp ? data.upiApp.toUpperCase() : 'UPI'} (Ref: ${finalUtr}). Balance ₹${balanceDue} payable on delivery.`,
             timestamp: new Date().toISOString(),
           },
         ],

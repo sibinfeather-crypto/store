@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import type { Product, CategoryInfo } from '../types/index.ts';
 import { ProductCard } from '../components/ProductCard.tsx';
+import { useCart } from '../context/CartContext.tsx';
 import { api } from '../services/api.ts';
 
 interface HomeViewProps {
@@ -24,10 +25,18 @@ export const HomeView: React.FC<HomeViewProps> = ({
   categories,
   onNavigate,
 }) => {
+  const { addToCart } = useCart();
   const [newsletterEmail, setNewsletterEmail] = useState('');
   const [newsletterConsent, setNewsletterConsent] = useState(false);
   const [newsletterStatus, setNewsletterStatus] = useState<string | null>(null);
   const [newsletterLoading, setNewsletterLoading] = useState(false);
+
+  // Buyer clicks product -> goes directly to payment option
+  const handleDirectBuy = (slug: string) => {
+    const found = products.find((p) => p.slug === slug);
+    if (found) addToCart(found, 1);
+    onNavigate('checkout');
+  };
 
   // Best Sellers: featured items
   const bestSellers = products.filter((p) => p.featured && !p.isIncomplete).slice(0, 4);
@@ -113,8 +122,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
             <div className="lg:col-span-5 grid grid-cols-2 gap-3.5 sm:gap-4">
               <div className="space-y-3.5 sm:space-y-4">
                 <div
-                  onClick={() => onNavigate('product', 'fanko-precision-pour-glass-oil-vinegar-dispenser-jug')}
+                  onClick={() => handleDirectBuy('fanko-precision-pour-glass-oil-vinegar-dispenser-jug')}
                   className="group bg-[#F7F8F6] rounded-2xl p-4 border border-[#E5E8E3] flex flex-col items-center justify-center cursor-pointer transition-transform hover:-translate-y-1"
+                  title="Click to buy directly with instant payment"
                 >
                   <img
                     src="/assets/aistudio/WhatsApp_Image_2026-09-13_at_7.38.0_7cad6069.jpeg"
@@ -127,8 +137,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 </div>
 
                 <div
-                  onClick={() => onNavigate('product', 'fanko-ribbed-multi-slot-vanity-countertop-organizer')}
+                  onClick={() => handleDirectBuy('fanko-ribbed-multi-slot-vanity-countertop-organizer')}
                   className="group bg-[#F7F8F6] rounded-2xl p-4 border border-[#E5E8E3] flex flex-col items-center justify-center cursor-pointer transition-transform hover:-translate-y-1"
+                  title="Click to buy directly with instant payment"
                 >
                   <img
                     src="/assets/aistudio/Ribbed_White_Vanity_Organizer_0347519c.png"
@@ -143,8 +154,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
 
               <div className="space-y-3.5 sm:space-y-4 pt-4 sm:pt-6">
                 <div
-                  onClick={() => onNavigate('product', 'fanko-3-in-1-dual-soap-dispenser-with-drainage-sponge-caddy')}
+                  onClick={() => handleDirectBuy('fanko-3-in-1-dual-soap-dispenser-with-drainage-sponge-caddy')}
                   className="group bg-[#F7F8F6] rounded-2xl p-4 border border-[#E5E8E3] flex flex-col items-center justify-center cursor-pointer transition-transform hover:-translate-y-1"
+                  title="Click to buy directly with instant payment"
                 >
                   <img
                     src="/assets/aistudio/WhatsApp_Image_2026-09-13_at_7.38._d592a183.jpeg"
@@ -157,8 +169,9 @@ export const HomeView: React.FC<HomeViewProps> = ({
                 </div>
 
                 <div
-                  onClick={() => onNavigate('product', 'fanko-hydro-lock-fresh-herb-coriander-preserver-capsule')}
+                  onClick={() => handleDirectBuy('fanko-hydro-lock-fresh-herb-coriander-preserver-capsule')}
                   className="group bg-[#F7F8F6] rounded-2xl p-4 border border-[#E5E8E3] flex flex-col items-center justify-center cursor-pointer transition-transform hover:-translate-y-1"
+                  title="Click to buy directly with instant payment"
                 >
                   <img
                     src="/assets/aistudio/ChatGPT_Image_Sep_13__2026__08_08_46_PM_7a07ca46.png"
@@ -173,49 +186,6 @@ export const HomeView: React.FC<HomeViewProps> = ({
             </div>
 
           </div>
-        </div>
-      </section>
-
-      {/* Shop By Category Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between mb-8 gap-4">
-          <div>
-            <p className="text-xs font-bold text-[#087A42] uppercase tracking-wider mb-1">
-              Curated Collections
-            </p>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-[#202720]">
-              Shop by Category
-            </h2>
-          </div>
-          <button
-            onClick={() => onNavigate('shop')}
-            className="text-xs font-bold text-[#087A42] hover:text-[#066336] flex items-center gap-1 cursor-pointer"
-          >
-            <span>View All Products</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {categories.map((cat) => (
-            <button
-              key={cat.id}
-              onClick={() => onNavigate('shop', `category=${encodeURIComponent(cat.name)}`)}
-              className="group bg-white rounded-2xl p-4 border border-[#E5E8E3] text-left flex flex-col items-center text-center hover:border-[#087A42] hover:shadow-md transition-all cursor-pointer"
-            >
-              <div className="w-20 h-20 sm:w-24 sm:h-24 bg-[#F7F8F6] rounded-xl p-2 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
-                <img
-                  src={cat.image}
-                  alt={cat.name}
-                  className="max-h-full max-w-full object-contain"
-                />
-              </div>
-              <h3 className="text-xs font-bold text-[#202720] group-hover:text-[#087A42] transition-colors leading-tight line-clamp-2">
-                {cat.name}
-              </h3>
-              <p className="text-[10px] text-[#5E695E] mt-1">Explore</p>
-            </button>
-          ))}
         </div>
       </section>
 
@@ -245,6 +215,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               key={prod.id}
               product={prod}
               onSelect={(slug) => onNavigate('product', slug)}
+              onNavigate={onNavigate}
             />
           ))}
         </div>
@@ -332,6 +303,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               key={prod.id}
               product={prod}
               onSelect={(slug) => onNavigate('product', slug)}
+              onNavigate={onNavigate}
             />
           ))}
         </div>

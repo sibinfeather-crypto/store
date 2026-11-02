@@ -12,8 +12,7 @@ import {
   Home,
   Grid,
   Phone,
-  Info,
-  Sparkles
+  Info
 } from 'lucide-react';
 import { useCart } from '../context/CartContext.tsx';
 import { useWishlist } from '../context/WishlistContext.tsx';
@@ -26,15 +25,6 @@ interface HeaderProps {
   currentParam?: string;
   onNavigate: (view: string, param?: string) => void;
 }
-
-const mobileCategories = [
-  { name: 'Kitchen Essentials', slug: 'Kitchen Essentials', badge: 'Popular' },
-  { name: 'Home Organization', slug: 'Home Organization', badge: 'Hot' },
-  { name: 'Storage Solutions', slug: 'Storage Solutions', badge: '' },
-  { name: 'Cleaning Accessories', slug: 'Cleaning Accessories', badge: '' },
-  { name: 'Bathroom Organizers', slug: 'Bathroom Organizers', badge: '' },
-  { name: 'Daily-use Products', slug: 'Daily-use Products', badge: 'New' },
-];
 
 export const Header: React.FC<HeaderProps> = ({ currentView, currentParam = '', onNavigate }) => {
   const { itemCount, setIsCartOpen } = useCart();
@@ -398,45 +388,7 @@ export const Header: React.FC<HeaderProps> = ({ currentView, currentParam = '', 
                   </button>
                 </div>
 
-                {/* Categories Section */}
-                <div className="pt-2 border-t border-[#E5E8E3]">
-                  <div className="flex items-center justify-between px-3 py-1.5 mb-1">
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-[#5E695E]">
-                      Shop by Category
-                    </span>
-                    <Sparkles className="w-3.5 h-3.5 text-[#087A42]" />
-                  </div>
-                  <div className="space-y-0.5">
-                    {mobileCategories.map((cat) => {
-                      const isActive =
-                        currentView === 'shop' &&
-                        currentParam.includes(encodeURIComponent(cat.slug)) ||
-                        currentParam.includes(cat.slug);
 
-                      return (
-                        <button
-                          key={cat.slug}
-                          onClick={() => navigateAndClose('shop', `category=${encodeURIComponent(cat.slug)}`)}
-                          className={`w-full flex items-center justify-between py-2 px-3 rounded-lg text-sm transition-colors cursor-pointer ${
-                            isActive
-                              ? 'bg-[#E8F5EE] text-[#087A42] font-bold'
-                              : 'text-[#202720] hover:bg-[#F7F8F6]'
-                          }`}
-                        >
-                          <span className="truncate">{cat.name}</span>
-                          <div className="flex items-center gap-1.5">
-                            {cat.badge && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-[#FFF4E5] text-[#FF7900]">
-                                {cat.badge}
-                              </span>
-                            )}
-                            <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
 
                 {/* Account & Activity Section */}
                 <div className="pt-2 border-t border-[#E5E8E3] space-y-1">

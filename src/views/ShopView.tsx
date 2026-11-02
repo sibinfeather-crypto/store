@@ -258,6 +258,7 @@ export const ShopView: React.FC<ShopViewProps> = ({
                   key={prod.id}
                   product={prod}
                   onSelect={(slug) => onNavigate('product', slug)}
+                  onNavigate={onNavigate}
                 />
               ))}
             </div>

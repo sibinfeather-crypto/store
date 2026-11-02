@@ -1,5 +1,5 @@
 import React from 'react';
-import { Heart, ShoppingBag, Eye, Star } from 'lucide-react';
+import { Heart, Zap, Star } from 'lucide-react';
 import type { Product } from '../types/index.ts';
 import { useCart } from '../context/CartContext.tsx';
 import { useWishlist } from '../context/WishlistContext.tsx';
@@ -7,9 +7,10 @@ import { useWishlist } from '../context/WishlistContext.tsx';
 interface ProductCardProps {
   product: Product;
   onSelect: (slug: string) => void;
+  onNavigate?: (view: string, param?: string) => void;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelect }) => {
+export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelect, onNavigate }) => {
   const { addToCart } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
 
@@ -20,15 +21,28 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelect }) =
     ? Math.round(((product.price - product.salePrice) / product.price) * 100)
     : 0;
 
+  // Buyer clicks product or Buy Now -> directly adds item and goes to payment option
+  const handleGoToPayment = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (isOutOfStock) return;
+    addToCart(product, 1);
+    if (onNavigate) {
+      onNavigate('checkout');
+    } else {
+      onSelect(product.slug);
+    }
+  };
+
   return (
     <div className="group bg-white rounded-2xl border border-[#E5E8E3] overflow-hidden flex flex-col transition-all duration-200 hover:-translate-y-1 hover:shadow-md">
       
       {/* Product Image Container */}
       <div className="relative aspect-4/3 bg-[#F7F8F6] p-4 flex items-center justify-center overflow-hidden">
         <button
-          onClick={() => onSelect(product.slug)}
+          onClick={handleGoToPayment}
           className="w-full h-full flex items-center justify-center cursor-pointer"
-          aria-label={`View ${product.name}`}
+          aria-label={`Buy ${product.name} - Go to Payment`}
+          title="Click to proceed directly to payment"
         >
           <img
             src={product.images[0] || '/assets/aistudio/fankostore.logo_1f90e1f5.png'}
@@ -55,7 +69,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelect }) =
           <Heart className={`w-4 h-4 ${isFavorited ? 'fill-white' : ''}`} />
         </button>
 
-        {/* Quiet text discount / stock indicator */}
+        {/* Discount / stock indicator */}
         {discountPercent > 0 && !isOutOfStock && (
           <span className="absolute top-3 left-3 text-[11px] font-bold text-[#087A42] bg-white/90 backdrop-blur-xs px-2 py-0.5 rounded-md border border-[#E5E8E3]">
             {discountPercent}% OFF
@@ -77,25 +91,38 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelect }) =
           {/* Category & Rating */}
           <div className="flex items-center justify-between text-xs text-[#5E695E] mb-1.5">
             <span>{product.category}</span>
-            {product.rating > 0 && (
-              <span className="flex items-center gap-1 font-medium text-[#202720]">
-                <Star className="w-3.5 h-3.5 fill-[#FF7900] text-[#FF7900]" />
-                <span className="tabular-nums">{product.rating}</span>
-                <span className="text-[11px] text-[#5E695E]">({product.reviewCount})</span>
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {product.rating > 0 && (
+                <span className="flex items-center gap-1 font-medium text-[#202720]">
+                  <Star className="w-3.5 h-3.5 fill-[#FF7900] text-[#FF7900]" />
+                  <span className="tabular-nums">{product.rating}</span>
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect(product.slug);
+                }}
+                className="text-[10px] text-slate-400 hover:text-[#087A42] underline cursor-pointer"
+                title="View full specs"
+              >
+                Details
+              </button>
+            </div>
           </div>
 
           {/* Title */}
           <button
-            onClick={() => onSelect(product.slug)}
+            onClick={handleGoToPayment}
             className="text-left font-semibold text-sm text-[#202720] hover:text-[#087A42] transition-colors line-clamp-2 cursor-pointer mb-2"
+            title="Click to proceed directly to payment"
           >
             {product.name}
           </button>
         </div>
 
-        {/* Pricing & Add to Cart Action */}
+        {/* Pricing & Direct Buy Action */}
         <div className="pt-2 border-t border-[#E5E8E3]/60 flex items-center justify-between gap-2 mt-auto">
           <div>
             <div className="flex items-baseline gap-1.5">
@@ -114,17 +141,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onSelect }) =
           </div>
 
           <button
-            onClick={() => addToCart(product, 1)}
+            onClick={handleGoToPayment}
             disabled={isOutOfStock}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-all ${
+            className={`px-3.5 py-1.5 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-all cursor-pointer ${
               isOutOfStock
                 ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                 : 'bg-[#087A42] text-white hover:bg-[#066336] active:scale-95 shadow-xs'
             }`}
-            aria-label={`Order ${product.name}`}
+            aria-label={`Buy ${product.name} Now`}
           >
-            <ShoppingBag className="w-3.5 h-3.5" />
-            <span>Order Now</span>
+            <Zap className="w-3.5 h-3.5 text-[#FF7900]" />
+            <span>Buy Now</span>
           </button>
         </div>
 

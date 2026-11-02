@@ -232,20 +232,13 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <button
-                  onClick={() => addToCart(product, quantity)}
-                  className="py-3.5 px-4 bg-[#F7F8F6] hover:bg-[#E5E8E3] text-[#202720] text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2 border border-[#E5E8E3] transition-all cursor-pointer"
-                >
-                  <ShoppingBag className="w-4 h-4 text-[#087A42]" />
-                  <span>Add to Cart</span>
-                </button>
+              <div className="pt-2">
                 <button
                   onClick={handleBuyNow}
-                  className="py-3.5 px-4 bg-[#087A42] hover:bg-[#066336] text-white text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98] cursor-pointer"
+                  className="w-full py-4 px-6 bg-[#087A42] hover:bg-[#066336] text-white text-sm sm:text-base font-bold rounded-xl flex items-center justify-center gap-2.5 shadow-md transition-all active:scale-[0.98] cursor-pointer"
                 >
-                  <Zap className="w-4 h-4 text-[#FF7900]" />
-                  <span>Buy Now</span>
+                  <Zap className="w-5 h-5 text-[#FF7900]" />
+                  <span>Buy Now — Proceed to Payment</span>
                 </button>
               </div>
             </div>
