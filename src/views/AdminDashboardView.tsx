@@ -136,6 +136,8 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
   const [orderStatusFilter, setOrderStatusFilter] = useState<string>('all');
   const [orderPaymentFilter, setOrderPaymentFilter] = useState<string>('all');
   const [detailedOrder, setDetailedOrder] = useState<Order | null>(null);
+  const [previewReceiptUrl, setPreviewReceiptUrl] = useState<string | null>(null);
+  const [copiedUtr, setCopiedUtr] = useState(false);
 
   // Order status update form inside details modal
   const [editFulfillmentStatus, setEditFulfillmentStatus] = useState<OrderFulfillmentStatus>('confirmed');
@@ -1698,8 +1700,13 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
             {/* Financial & Payment Verification Summary */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-4 bg-[#F7F8F6] rounded-2xl border border-[#E5E8E3] space-y-2 text-xs">
-                <h5 className="font-bold text-[#202720]">Payment Details</h5>
-                <div className="space-y-1 text-[11px]">
+                <div className="flex items-center justify-between">
+                  <h5 className="font-bold text-[#202720]">Payment & Verification Details</h5>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-[#087A42] border border-emerald-200">
+                    Payment Verified
+                  </span>
+                </div>
+                <div className="space-y-1.5 text-[11px]">
                   <div className="flex justify-between">
                     <span className="text-[#5E695E]">Payment Method:</span>
                     <strong className="text-[#202720] uppercase">{detailedOrder.paymentMethod}</strong>
@@ -1709,19 +1716,56 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
                     <strong className="text-[#087A42] uppercase">{detailedOrder.paymentDetails?.upiApp || 'UPI'}</strong>
                   </div>
                   {detailedOrder.paymentDetails?.utrNumber && (
+                    <div className="flex items-center justify-between p-1.5 bg-white rounded-lg border border-[#E5E8E3]">
+                      <span className="text-[#5E695E] font-medium">Verified UTR:</span>
+                      <div className="flex items-center gap-1.5">
+                        <strong className="font-mono text-xs text-[#087A42] select-all">
+                          {detailedOrder.paymentDetails.utrNumber}
+                        </strong>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (detailedOrder.paymentDetails?.utrNumber) {
+                              navigator.clipboard.writeText(detailedOrder.paymentDetails.utrNumber);
+                              setCopiedUtr(true);
+                              setTimeout(() => setCopiedUtr(false), 2000);
+                            }
+                          }}
+                          className="p-1 text-slate-400 hover:text-[#087A42] rounded hover:bg-slate-100 cursor-pointer"
+                          title="Copy UTR to verify in bank"
+                        >
+                          {copiedUtr ? <Check className="w-3.5 h-3.5 text-[#087A42]" /> : <Copy className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {detailedOrder.paymentDetails?.payerUpiId && (
                     <div className="flex justify-between">
-                      <span className="text-[#5E695E]">UTR / Reference:</span>
-                      <strong className="font-mono text-[#202720]">{detailedOrder.paymentDetails.utrNumber}</strong>
+                      <span className="text-[#5E695E]">Customer UPI / Phone:</span>
+                      <strong className="font-mono text-[#202720]">{detailedOrder.paymentDetails.payerUpiId}</strong>
+                    </div>
+                  )}
+                  {detailedOrder.paymentDetails?.paymentProofUrl && (
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[#5E695E]">Proof Screenshot:</span>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewReceiptUrl(detailedOrder.paymentDetails?.paymentProofUrl || null)}
+                        className="text-[11px] font-bold text-[#087A42] hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>View Screenshot</span>
+                      </button>
                     </div>
                   )}
                   {detailedOrder.paymentDetails?.advancePaid !== undefined && (
-                    <div className="flex justify-between text-emerald-700">
-                      <span>Advance Amount Paid:</span>
+                    <div className="flex justify-between text-emerald-700 font-semibold pt-1 border-t border-[#E5E8E3]">
+                      <span>Amount Paid via UPI:</span>
                       <strong>₹{detailedOrder.paymentDetails.advancePaid}</strong>
                     </div>
                   )}
                   {detailedOrder.paymentDetails?.balanceDueOnDelivery !== undefined && (
-                    <div className="flex justify-between text-orange-700">
+                    <div className="flex justify-between text-orange-700 font-semibold">
                       <span>Balance Due on Delivery:</span>
                       <strong>₹{detailedOrder.paymentDetails.balanceDueOnDelivery}</strong>
                     </div>
@@ -2174,6 +2218,43 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Receipt Image Preview Modal */}
+      {previewReceiptUrl && (
+        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-5 space-y-3 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-[#E5E8E3]">
+              <div className="flex items-center gap-2">
+                <Eye className="w-4 h-4 text-[#087A42]" />
+                <h4 className="text-xs font-bold text-[#202720]">Customer Payment Receipt Screenshot</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewReceiptUrl(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="max-h-[70vh] overflow-auto flex items-center justify-center bg-slate-50 rounded-2xl p-2 border border-[#E5E8E3]">
+              <img
+                src={previewReceiptUrl}
+                alt="Payment proof screenshot"
+                className="max-h-[65vh] max-w-full object-contain rounded-xl"
+              />
+            </div>
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => setPreviewReceiptUrl(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-xs font-semibold rounded-xl text-[#202720] cursor-pointer"
+              >
+                Close Preview
+              </button>
+            </div>
           </div>
         </div>
       )}

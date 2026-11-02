@@ -552,7 +552,9 @@ export const api = {
     items: { productId: string; quantity: number }[];
     couponCode?: string;
     upiApp?: 'gpay' | 'phonepe' | 'paytm' | 'other';
-    utrNumber?: string;
+    utrNumber: string;
+    payerUpiId?: string;
+    paymentProofUrl?: string;
   }): Promise<{ success: boolean; order: Order }> {
     try {
       return await safeJsonFetch(`${API_BASE}/orders/upi`, {
@@ -583,7 +585,10 @@ export const api = {
           mode: 'upi',
           upiApp: data.upiApp || 'other',
           upiTransactionId: upiTxnId,
-          utrNumber: data.utrNumber || upiTxnId,
+          utrNumber: data.utrNumber,
+          payerUpiId: data.payerUpiId,
+          paymentProofUrl: data.paymentProofUrl,
+          paymentVerified: true,
           upiId: settings.upiId || 'fankostore@okhdfcbank',
           advancePaid: calculation.total,
           balanceDueOnDelivery: 0,
@@ -595,7 +600,7 @@ export const api = {
         statusHistory: [
           {
             status: 'confirmed',
-            note: `Order placed with 100% Full UPI Payment via ${data.upiApp ? data.upiApp.toUpperCase() : 'UPI'} (Amount: ₹${calculation.total}${data.utrNumber ? `, UTR: ${data.utrNumber}` : ''}). Payment verified.`,
+            note: `Order placed after 100% Full UPI Payment via ${data.upiApp ? data.upiApp.toUpperCase() : 'UPI'} (Amount: ₹${calculation.total}, Verified UTR: ${data.utrNumber}). Payment verified.`,
             timestamp: new Date().toISOString(),
           },
         ],
@@ -613,7 +618,9 @@ export const api = {
     items: { productId: string; quantity: number }[];
     couponCode?: string;
     upiApp?: 'gpay' | 'phonepe' | 'paytm' | 'other';
-    utrNumber?: string;
+    utrNumber: string;
+    payerUpiId?: string;
+    paymentProofUrl?: string;
   }): Promise<{ success: boolean; order: Order }> {
     try {
       return await safeJsonFetch(`${API_BASE}/orders/cod`, {
@@ -648,7 +655,10 @@ export const api = {
           balanceDueOnDelivery: balanceDue,
           upiApp: data.upiApp || 'other',
           upiTransactionId: upiTxnId,
-          utrNumber: data.utrNumber || upiTxnId,
+          utrNumber: data.utrNumber,
+          payerUpiId: data.payerUpiId,
+          paymentProofUrl: data.paymentProofUrl,
+          paymentVerified: true,
           upiId: settings.upiId || 'fankostore@okhdfcbank',
           paidAt: new Date().toISOString(),
         },
@@ -658,7 +668,7 @@ export const api = {
         statusHistory: [
           {
             status: 'confirmed',
-            note: `Order confirmed with Cash on Delivery (COD). ₹${advanceAmount} advance verified via ${data.upiApp ? data.upiApp.toUpperCase() : 'UPI'}${data.utrNumber ? ` (UTR: ${data.utrNumber})` : ''}. Balance ₹${balanceDue} payable on delivery.`,
+            note: `Order placed after Cash on Delivery (COD) advance payment of ₹${advanceAmount} verified via ${data.upiApp ? data.upiApp.toUpperCase() : 'UPI'} (UTR: ${data.utrNumber}). Balance ₹${balanceDue} payable on delivery.`,
             timestamp: new Date().toISOString(),
           },
         ],

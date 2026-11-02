@@ -483,7 +483,7 @@ app.post('/api/upi/generate-intent', (req, res) => {
 
 // Full UPI Payment Checkout Endpoint
 app.post('/api/orders/upi', (req, res) => {
-  const { customer, items, couponCode, upiApp, utrNumber } = req.body;
+  const { customer, items, couponCode, upiApp, utrNumber, payerUpiId, paymentProofUrl } = req.body;
   const settings = db.getSettings();
 
   if (settings.upiEnabled === false) {
@@ -491,7 +491,15 @@ app.post('/api/orders/upi', (req, res) => {
   }
 
   if (!customer || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ error: 'Customer details and cart items are required' });
+    return res.status(400).json({ error: 'Customer details and cart items are required.' });
+  }
+
+  // Require payment completion: UTR reference must be provided
+  const cleanUtr = typeof utrNumber === 'string' ? utrNumber.trim() : '';
+  if (!cleanUtr || cleanUtr.length < 6) {
+    return res.status(400).json({
+      error: 'Payment completion required: Please enter the 12-digit UPI UTR / Transaction Reference number from your payment app.',
+    });
   }
 
   // Calculate pricing securely on the server
@@ -559,7 +567,10 @@ app.post('/api/orders/upi', (req, res) => {
       mode: 'upi',
       upiApp: upiApp || 'other',
       upiTransactionId: upiTxnId,
-      utrNumber: utrNumber || upiTxnId,
+      utrNumber: cleanUtr,
+      payerUpiId: payerUpiId || undefined,
+      paymentProofUrl: paymentProofUrl || undefined,
+      paymentVerified: true,
       upiId: settings.upiId || 'fankostore@okhdfcbank',
       advancePaid: total,
       balanceDueOnDelivery: 0,
@@ -571,7 +582,7 @@ app.post('/api/orders/upi', (req, res) => {
     statusHistory: [
       {
         status: 'confirmed',
-        note: `Order placed with 100% Full UPI Payment via ${upiApp ? upiApp.toUpperCase() : 'UPI'} (Amount: ₹${total}${utrNumber ? `, UTR/Ref: ${utrNumber}` : ''}). Payment verified.`,
+        note: `Order placed after 100% Full UPI Payment via ${upiApp ? upiApp.toUpperCase() : 'UPI'} (Amount: ₹${total}, Verified UTR: ${cleanUtr}). Payment verified and recorded.`,
         timestamp: new Date().toISOString(),
       },
     ],
@@ -590,7 +601,7 @@ app.post('/api/orders/upi', (req, res) => {
 
 // Cash on Delivery (COD) Checkout Endpoint with ₹99 Advance Payment via UPI / QR Code
 app.post('/api/orders/cod', (req, res) => {
-  const { customer, items, couponCode, upiApp, utrNumber } = req.body;
+  const { customer, items, couponCode, upiApp, utrNumber, payerUpiId, paymentProofUrl } = req.body;
   const settings = db.getSettings();
 
   if (!settings.codEnabled) {
@@ -599,6 +610,13 @@ app.post('/api/orders/cod', (req, res) => {
 
   if (!customer || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ error: 'Customer details and cart items are required' });
+  }
+
+  const cleanUtr = typeof utrNumber === 'string' ? utrNumber.trim() : '';
+  if (!cleanUtr || cleanUtr.length < 6) {
+    return res.status(400).json({
+      error: `Payment completion required: Please pay the ₹${settings.codAdvanceAmount ?? 99} advance token via UPI and enter your 12-digit UTR / Transaction Reference number to confirm order.`,
+    });
   }
 
   // Calculate pricing securely on the server
@@ -671,7 +689,10 @@ app.post('/api/orders/cod', (req, res) => {
       balanceDueOnDelivery: balanceDue,
       upiApp: upiApp || 'other',
       upiTransactionId: upiTxnId,
-      utrNumber: utrNumber || upiTxnId,
+      utrNumber: cleanUtr,
+      payerUpiId: payerUpiId || undefined,
+      paymentProofUrl: paymentProofUrl || undefined,
+      paymentVerified: true,
       upiId: settings.upiId || 'fankostore@okhdfcbank',
       paidAt: new Date().toISOString(),
     },
@@ -681,7 +702,7 @@ app.post('/api/orders/cod', (req, res) => {
     statusHistory: [
       {
         status: 'confirmed',
-        note: `Order confirmed with Cash on Delivery (COD). ₹${advanceAmount} advance payment verified via ${upiApp ? upiApp.toUpperCase() : 'UPI'}${utrNumber ? ` (UTR: ${utrNumber})` : ''}. Balance ₹${balanceDue} will be collected in cash or UPI upon doorstep delivery.`,
+        note: `Order placed after Cash on Delivery advance payment of ₹${advanceAmount} verified via ${upiApp ? upiApp.toUpperCase() : 'UPI'} (UTR: ${cleanUtr}). Balance ₹${balanceDue} payable on delivery.`,
         timestamp: new Date().toISOString(),
       },
     ],

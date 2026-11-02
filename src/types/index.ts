@@ -116,6 +116,9 @@ export interface OrderPaymentDetails {
   upiApp?: 'gpay' | 'phonepe' | 'paytm' | 'other';
   upiTransactionId?: string;
   utrNumber?: string;
+  payerUpiId?: string;
+  paymentProofUrl?: string;
+  paymentVerified?: boolean;
   upiId?: string;
   advancePaid?: number;
   balanceDueOnDelivery?: number;
