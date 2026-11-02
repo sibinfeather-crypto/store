@@ -122,30 +122,15 @@ export const CartView: React.FC<CartViewProps> = ({ onNavigate }) => {
           {/* Cart Items List Column */}
           <div className="lg:col-span-8 space-y-4">
             
-            {/* Free Shipping Progress Card */}
-            <div className="bg-white p-4 rounded-xl border border-[#E5E8E3] shadow-xs space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-[#202720] flex items-center gap-1.5">
-                  <Truck className="w-4 h-4 text-[#087A42]" />
-                  {amountNeededForFreeShipping > 0 ? (
-                    <>
-                      Add <strong className="text-[#087A42]">₹{amountNeededForFreeShipping}</strong> more for <strong>FREE Pan-India Delivery</strong>
-                    </>
-                  ) : (
-                    <span className="text-[#087A42] font-bold flex items-center gap-1">
-                      <CheckCircle2 className="w-4 h-4 text-[#087A42]" />
-                      You qualify for FREE Pan-India Shipping!
-                    </span>
-                  )}
-                </span>
-                <span className="text-[#5E695E] font-medium">{freeShippingProgress}%</span>
-              </div>
-              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-[#087A42] transition-all duration-300 rounded-full"
-                  style={{ width: `${freeShippingProgress}%` }}
-                />
-              </div>
+            {/* Free Shipping Highlight Card */}
+            <div className="bg-[#E8F5EE] p-3.5 rounded-xl border border-[#087A42]/20 shadow-xs flex items-center justify-between">
+              <span className="text-xs font-bold text-[#087A42] flex items-center gap-2">
+                <Truck className="w-4 h-4 text-[#087A42]" />
+                <span>All products qualify for FREE Pan-India Delivery!</span>
+              </span>
+              <span className="text-[11px] font-bold text-[#087A42] bg-white px-2 py-0.5 rounded-full border border-[#087A42]/20">
+                100% FREE
+              </span>
             </div>
 
             {/* Items Table/Cards */}

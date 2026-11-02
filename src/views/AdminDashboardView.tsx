@@ -1426,24 +1426,28 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
                   <label className="text-xs font-bold text-[#202720] block mb-1">Free Shipping Threshold (₹)</label>
                   <input
                     type="number"
-                    value={settingsForm.freeShippingThreshold || 499}
+                    min="0"
+                    value={settingsForm.freeShippingThreshold ?? 0}
                     onChange={(e) =>
                       setSettingsForm({ ...settingsForm, freeShippingThreshold: Number(e.target.value) })
                     }
                     className="w-full text-xs px-3.5 py-2.5 bg-white border border-[#E5E8E3] rounded-xl"
                   />
+                  <p className="text-[10px] text-[#087A42] font-semibold mt-1">₹0 = Free Shipping on all orders</p>
                 </div>
 
                 <div>
                   <label className="text-xs font-bold text-[#202720] block mb-1">Standard Shipping Fee (₹)</label>
                   <input
                     type="number"
-                    value={settingsForm.standardShippingFee || 49}
+                    min="0"
+                    value={settingsForm.standardShippingFee ?? 0}
                     onChange={(e) =>
                       setSettingsForm({ ...settingsForm, standardShippingFee: Number(e.target.value) })
                     }
                     className="w-full text-xs px-3.5 py-2.5 bg-white border border-[#E5E8E3] rounded-xl"
                   />
+                  <p className="text-[10px] text-[#087A42] font-semibold mt-1">₹0 = Free Shipping for customers</p>
                 </div>
               </div>
             </div>

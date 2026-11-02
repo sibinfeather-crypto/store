@@ -46,8 +46,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
   const [couponDiscount, setCouponDiscount] = useState<number>(0);
   const [couponError, setCouponError] = useState<string | null>(null);
-  const [freeShippingThreshold, setFreeShippingThreshold] = useState<number>(499);
-  const [standardShippingFee, setStandardShippingFee] = useState<number>(49);
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState<number>(0);
+  const [standardShippingFee, setStandardShippingFee] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
 
   // Sync with localStorage
@@ -62,8 +62,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Load store settings for threshold
   useEffect(() => {
     api.getSettings().then((s) => {
-      if (s.freeShippingThreshold) setFreeShippingThreshold(s.freeShippingThreshold);
-      if (s.standardShippingFee) setStandardShippingFee(s.standardShippingFee);
+      if (s.freeShippingThreshold !== undefined) setFreeShippingThreshold(s.freeShippingThreshold);
+      if (s.standardShippingFee !== undefined) setStandardShippingFee(s.standardShippingFee);
     }).catch(() => {});
   }, []);
 
@@ -92,10 +92,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
   }, [couponCode, subtotal]);
 
-  // Compute shipping fee
-  const shippingFee = subtotal >= freeShippingThreshold || subtotal === 0 ? 0 : standardShippingFee;
-  const amountNeededForFreeShipping = Math.max(0, freeShippingThreshold - subtotal);
-  const total = Math.max(0, subtotal - couponDiscount + shippingFee);
+  // Compute shipping fee - Free shipping on all products
+  const shippingFee = 0;
+  const amountNeededForFreeShipping = 0;
+  const total = Math.max(0, subtotal - couponDiscount);
 
   const addToCart = (product: Product, quantity = 1) => {
     if (product.stock <= 0) return;

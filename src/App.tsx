@@ -7,11 +7,11 @@ import React, { useState, useEffect } from 'react';
 import { CartProvider } from './context/CartContext.tsx';
 import { WishlistProvider } from './context/WishlistContext.tsx';
 import { AuthProvider } from './context/AuthContext.tsx';
-import { AnnouncementBar } from './components/AnnouncementBar.tsx';
 import { Header } from './components/Header.tsx';
 import { Footer } from './components/Footer.tsx';
 import { CartDrawer } from './components/CartDrawer.tsx';
 import { WhatsAppButton } from './components/WhatsAppButton.tsx';
+import { MobileBottomNav } from './components/MobileBottomNav.tsx';
 
 import { HomeView } from './views/HomeView.tsx';
 import { ShopView } from './views/ShopView.tsx';
@@ -278,15 +278,11 @@ export default function App() {
       <CartProvider>
         <WishlistProvider>
           <div className="min-h-screen flex flex-col bg-[#F7F8F6] text-[#202720]">
-            
-            {/* Announcement Banner */}
-            <AnnouncementBar />
-
             {/* Header Navigation Bar */}
             <Header currentView={currentView} currentParam={viewParam} onNavigate={navigateTo} />
 
             {/* Main Content View Router */}
-            <main className="flex-1">
+            <main className="flex-1 pb-16 lg:pb-0">
               {loading ? (
                 <div className="py-24 text-center space-y-3">
                   <div className="w-10 h-10 border-4 border-[#087A42] border-t-transparent rounded-full animate-spin mx-auto" />
@@ -412,6 +408,12 @@ export default function App() {
               onNavigate={navigateTo}
               whatsappNumber={whatsappNumber}
               supportEmail={supportEmail}
+            />
+
+            {/* Mobile Bottom Navigation Bar (Smartphones) */}
+            <MobileBottomNav
+              currentView={currentView}
+              onNavigate={navigateTo}
             />
 
           </div>

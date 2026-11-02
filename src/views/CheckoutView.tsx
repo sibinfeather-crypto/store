@@ -195,8 +195,8 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     handlePayNow(app);
   };
 
-  // Buyer clicks "Pay Now" -> Immediately redirect to GPay, PhonePe, or phone available apps
-  const handlePayNow = (appOverride?: 'gpay' | 'phonepe' | 'paytm' | 'other') => {
+  // Buyer clicks "Pay Now" -> Immediately redirect to GPay, PhonePe, or phone available apps and complete order
+  const handlePayNow = async (appOverride?: 'gpay' | 'phonepe' | 'paytm' | 'other') => {
     if (!upiModalData) return;
     const targetApp = appOverride || selectedApp || 'other';
     setSelectedApp(targetApp);
@@ -216,21 +216,10 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         window.location.href = upiModalData.upiUri;
       }
     }, 1200);
-  };
 
-  const handleCopyUpiId = () => {
-    if (!upiModalData) return;
-    navigator.clipboard.writeText(upiModalData.upiId);
-    setCopiedUpi(true);
-    setTimeout(() => setCopiedUpi(false), 2000);
-  };
-
-  // Automatic Payment Confirmation (No UTR number needed)
-  const handleConfirmOrderPlacement = async () => {
-    if (!upiModalData) return;
-
+    // Automatically confirm and place the order
     setIsProcessing(true);
-    setVerificationStatus('Verifying payment with bank network...');
+    setVerificationStatus('Confirming payment and placing order...');
     setError(null);
 
     try {
@@ -239,25 +228,23 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         quantity: i.quantity,
       }));
 
-      // Immediate real-time confirmation feedback
-      await new Promise((resolve) => setTimeout(resolve, 750));
-      setVerificationStatus('Payment Confirmed! Finalizing your order...');
+      // Brief delay to allow native app scheme switch
+      await new Promise((resolve) => setTimeout(resolve, 800));
 
       let result: { success: boolean; order: Order };
-
       if (upiModalData.paymentType === 'cod') {
         result = await api.createCodOrder({
           customer: form,
           items: payloadItems,
           couponCode: couponCode || undefined,
-          upiApp: selectedApp,
+          upiApp: targetApp,
         });
       } else {
         result = await api.createUpiOrder({
           customer: form,
           items: payloadItems,
           couponCode: couponCode || undefined,
-          upiApp: selectedApp,
+          upiApp: targetApp,
         });
       }
 
@@ -270,8 +257,15 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     } catch (err: any) {
       setIsProcessing(false);
       setVerificationStatus(null);
-      setError(err.message || 'Payment confirmation failed. Please try again.');
+      setError(err.message || 'Payment processing error. Please try again.');
     }
+  };
+
+  const handleCopyUpiId = () => {
+    if (!upiModalData) return;
+    navigator.clipboard.writeText(upiModalData.upiId);
+    setCopiedUpi(true);
+    setTimeout(() => setCopiedUpi(false), 2000);
   };
 
   const currentAdvance = Math.min(codAdvanceAmount, total);
@@ -323,10 +317,11 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 <input
                   type="text"
                   required
+                  autoComplete="name"
                   placeholder="e.g. Rahul Sharma"
                   value={form.fullName}
                   onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
+                  className="w-full text-base sm:text-xs px-3.5 py-3 sm:py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
                 />
               </div>
 
@@ -335,15 +330,17 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                   Mobile Number (for Courier updates) *
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-xs text-[#5E695E] font-medium">+91</span>
+                  <span className="absolute left-3 top-3.5 sm:top-2.5 text-xs text-[#5E695E] font-medium">+91</span>
                   <input
                     type="tel"
                     required
+                    inputMode="numeric"
+                    autoComplete="tel"
                     placeholder="98765 43210"
                     maxLength={10}
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })}
-                    className="w-full text-xs pl-11 pr-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none font-mono"
+                    className="w-full text-base sm:text-xs pl-11 pr-3.5 py-3 sm:py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none font-mono"
                   />
                 </div>
               </div>
@@ -355,10 +352,11 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 <input
                   type="email"
                   required
+                  autoComplete="email"
                   placeholder="rahul@example.com"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
+                  className="w-full text-base sm:text-xs px-3.5 py-3 sm:py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
                 />
               </div>
 
@@ -369,10 +367,11 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 <input
                   type="text"
                   required
+                  autoComplete="street-address"
                   placeholder="e.g. Flat 402, Sunshine Apartments, Main Road"
                   value={form.addressLine}
                   onChange={(e) => setForm({ ...form, addressLine: e.target.value })}
-                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
+                  className="w-full text-base sm:text-xs px-3.5 py-3 sm:py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
                 />
               </div>
 
@@ -385,7 +384,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                   placeholder="e.g. Near City Hospital or Metro Pillar 12"
                   value={form.landmark}
                   onChange={(e) => setForm({ ...form, landmark: e.target.value })}
-                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
+                  className="w-full text-base sm:text-xs px-3.5 py-3 sm:py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
                 />
               </div>
 
@@ -396,11 +395,13 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 <input
                   type="text"
                   required
+                  inputMode="numeric"
+                  autoComplete="postal-code"
                   maxLength={6}
                   placeholder="e.g. 400001"
                   value={form.pincode}
                   onChange={(e) => handlePincodeAutoFill(e.target.value.replace(/\D/g, ''))}
-                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none font-mono"
+                  className="w-full text-base sm:text-xs px-3.5 py-3 sm:py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none font-mono"
                 />
               </div>
 
@@ -414,7 +415,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                   placeholder="e.g. Mumbai"
                   value={form.city}
                   onChange={(e) => setForm({ ...form, city: e.target.value })}
-                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
+                  className="w-full text-base sm:text-xs px-3.5 py-3 sm:py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
                 />
               </div>
 
@@ -425,7 +426,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 <select
                   value={form.state}
                   onChange={(e) => setForm({ ...form, state: e.target.value })}
-                  className="w-full text-xs px-3.5 py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
+                  className="w-full text-base sm:text-xs px-3.5 py-3 sm:py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
                 >
                   {indianStates.map((st) => (
                     <option key={st} value={st}>
@@ -841,11 +842,21 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               <button
                 type="button"
                 onClick={() => handlePayNow(selectedApp || 'other')}
-                className="w-full py-4 bg-[#087A42] hover:bg-[#066336] text-white text-sm sm:text-base font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-[0.98] cursor-pointer"
+                disabled={isProcessing}
+                className="w-full py-4 bg-[#087A42] hover:bg-[#066336] text-white text-sm sm:text-base font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
               >
-                <Smartphone className="w-5 h-5 text-emerald-200" />
-                <span>Pay Now · ₹{upiModalData.amountToPay}</span>
-                <ChevronRight className="w-4 h-4 text-emerald-200" />
+                {isProcessing ? (
+                  <div className="flex items-center gap-2">
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>{verificationStatus || 'Processing Payment...'}</span>
+                  </div>
+                ) : (
+                  <>
+                    <Smartphone className="w-5 h-5 text-emerald-200" />
+                    <span>Pay Now · ₹{upiModalData.amountToPay}</span>
+                    <ChevronRight className="w-4 h-4 text-emerald-200" />
+                  </>
+                )}
               </button>
 
               <div className="flex items-center justify-center gap-2 text-[11px] text-[#5E695E]">
@@ -855,39 +866,6 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 <span className="font-semibold text-[#5f259f]">PhonePe</span>
                 <span>•</span>
                 <span className="font-semibold text-[#002970]">Paytm / UPI</span>
-              </div>
-
-              {/* Automatic Order Confirmation Button (No UTR needed) */}
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={handleConfirmOrderPlacement}
-                  disabled={isProcessing}
-                  className={`w-full py-3.5 border-2 rounded-2xl flex items-center justify-center gap-2 font-bold text-xs sm:text-sm transition-all cursor-pointer disabled:opacity-50 ${
-                    appOpened
-                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-md ring-2 ring-emerald-400/50'
-                      : 'bg-[#F7F8F6] hover:bg-[#E8F5EE] text-[#087A42] border-[#087A42]/30'
-                  }`}
-                >
-                  {isProcessing ? (
-                    <div className="flex items-center gap-2">
-                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                      <span>{verificationStatus || 'Confirming payment...'}</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>
-                        {appOpened
-                          ? `Payment Completed → Confirm Order (Instant)`
-                          : `I Have Paid ₹${upiModalData.amountToPay} → Confirm Order`}
-                      </span>
-                    </div>
-                  )}
-                </button>
-                <p className="text-[11px] text-center text-[#5E695E] mt-1.5">
-                  ⚡ Automatic payment confirmation · No UTR number required
-                </p>
               </div>
 
               <button

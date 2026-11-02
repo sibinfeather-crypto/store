@@ -105,7 +105,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
               <div className="pt-4 border-t border-[#E5E8E3] grid grid-cols-3 gap-4 text-xs text-[#5E695E]">
                 <div>
                   <p className="font-bold text-[#202720] text-sm tabular-nums">Pan-India</p>
-                  <p className="text-[11px]">Free delivery &gt; ₹499</p>
+                  <p className="text-[11px]">Free delivery on all orders</p>
                 </div>
                 <div>
                   <p className="font-bold text-[#202720] text-sm tabular-nums">UPI & COD</p>
@@ -209,7 +209,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           {bestSellers.map((prod) => (
             <ProductCard
               key={prod.id}
@@ -297,7 +297,7 @@ export const HomeView: React.FC<HomeViewProps> = ({
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           {newArrivals.map((prod) => (
             <ProductCard
               key={prod.id}

@@ -16,7 +16,7 @@ export const WhatsAppButton: React.FC<WhatsAppButtonProps> = ({
   )}`;
 
   return (
-    <div className="fixed bottom-6 right-6 z-30 flex items-center gap-3">
+    <div className="fixed bottom-18 sm:bottom-6 right-4 sm:right-6 z-30 flex items-center gap-3">
       {showTooltip && (
         <div className="hidden sm:flex items-center gap-2 bg-white text-[#202720] text-xs py-2 px-3 rounded-xl shadow-lg border border-[#E5E8E3] animate-in fade-in duration-200">
           <span>Need help? Chat with FanKO Support</span>

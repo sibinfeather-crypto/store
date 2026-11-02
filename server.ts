@@ -354,11 +354,8 @@ app.post('/api/orders/calculate', (req, res) => {
     }
   }
 
-  // Shipping fee calculation
-  let shippingFee = 0;
-  if (!isFreeShippingCoupon && calculatedSubtotal < settings.freeShippingThreshold) {
-    shippingFee = settings.standardShippingFee;
-  }
+  // Shipping fee calculation - Free shipping on all products
+  const shippingFee = 0;
 
   const total = Math.max(0, calculatedSubtotal - discount + shippingFee);
 
@@ -538,7 +535,7 @@ app.post('/api/orders/upi', (req, res) => {
     }
   }
 
-  const shippingFee = !isFreeShip && subtotal < settings.freeShippingThreshold ? settings.standardShippingFee : 0;
+  const shippingFee = 0;
   const total = Math.max(0, subtotal - discount + shippingFee);
 
   const orderNumber = `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -653,7 +650,7 @@ app.post('/api/orders/cod', (req, res) => {
     }
   }
 
-  const shippingFee = !isFreeShip && subtotal < settings.freeShippingThreshold ? settings.standardShippingFee : 0;
+  const shippingFee = 0;
   const total = Math.max(0, subtotal - discount + shippingFee);
 
   const advanceAmount = Math.min(settings.codAdvanceAmount ?? 99, total);

@@ -289,7 +289,7 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
           <div className="pt-4 border-t border-[#E5E8E3] grid grid-cols-2 gap-3 text-xs text-[#5E695E]">
             <div className="flex items-center gap-2">
               <Truck className="w-4 h-4 text-[#087A42]" />
-              <span>Free Delivery &gt; ₹499</span>
+              <span>Free Delivery on All Products</span>
             </div>
             <div className="flex items-center gap-2">
               <RefreshCw className="w-4 h-4 text-[#087A42]" />
@@ -353,6 +353,45 @@ export const ProductDetailView: React.FC<ProductDetailViewProps> = ({
           </p>
         </div>
       </div>
+
+      {/* Mobile Sticky Buy Now Bottom Bar */}
+      {!isOutOfStock && (
+        <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-[#E5E8E3] p-3 lg:hidden shadow-[0_-4px_16px_rgba(0,0,0,0.08)] flex items-center justify-between gap-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <div className="min-w-0">
+            <span className="text-[11px] text-[#5E695E] block leading-none">Price ({quantity} {quantity === 1 ? 'item' : 'items'})</span>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="text-lg font-black text-[#202720] tabular-nums">
+                ₹{effectivePrice * quantity}
+              </span>
+              {product.salePrice && (
+                <span className="text-xs text-slate-400 line-through tabular-nums">
+                  ₹{product.price * quantity}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                addToCart(product, quantity);
+                setIsCartOpen(true);
+              }}
+              className="p-3 bg-[#F7F8F6] text-[#202720] hover:bg-[#E8F5EE] hover:text-[#087A42] rounded-xl border border-[#E5E8E3] transition-colors cursor-pointer"
+              aria-label="Add to cart"
+            >
+              <ShoppingBag className="w-5 h-5" />
+            </button>
+            <button
+              onClick={handleBuyNow}
+              className="px-5 py-3 bg-[#087A42] hover:bg-[#066336] text-white text-xs sm:text-sm font-bold rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 transition-transform cursor-pointer"
+            >
+              <Zap className="w-4 h-4 text-[#FF7900]" />
+              <span>Buy Now</span>
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );

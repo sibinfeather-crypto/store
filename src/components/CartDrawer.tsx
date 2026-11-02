@@ -67,8 +67,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onNavigate }) => {
         className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity cursor-pointer"
       />
 
-      <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
-        <aside aria-label="Shopping Cart Drawer" className="w-screen max-w-md bg-white shadow-2xl flex flex-col justify-between">
+      <div className="absolute inset-y-0 right-0 max-w-full flex pl-0 sm:pl-10">
+        <aside aria-label="Shopping Cart Drawer" className="w-screen max-w-full sm:max-w-md bg-white shadow-2xl flex flex-col justify-between">
           
           {/* Header */}
           <div className="p-4 sm:p-5 border-b border-[#E5E8E3] flex items-center justify-between">
@@ -86,29 +86,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onNavigate }) => {
             </button>
           </div>
 
-          {/* Free Shipping Progress Indicator */}
-          <div className="bg-[#F7F8F6] px-4 py-3 border-b border-[#E5E8E3]">
-            {amountNeededForFreeShipping > 0 ? (
-              <div>
-                <p className="text-xs text-[#202720] font-medium flex items-center gap-1.5 mb-1.5">
-                  <Truck className="w-4 h-4 text-[#087A42]" />
-                  <span>
-                    Add <strong className="text-[#087A42]">₹{amountNeededForFreeShipping}</strong> more for <strong>FREE Pan-India Delivery</strong>
-                  </span>
-                </p>
-                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-[#087A42] transition-all duration-300 rounded-full"
-                    style={{ width: `${freeShippingProgress}%` }}
-                  />
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-[#087A42] font-semibold flex items-center gap-1.5">
-                <Check className="w-4 h-4 text-[#087A42]" />
-                <span>You unlocked FREE Pan-India Delivery!</span>
-              </p>
-            )}
+          {/* Free Shipping Highlight Banner */}
+          <div className="bg-[#E8F5EE] px-4 py-2.5 border-b border-[#087A42]/15">
+            <p className="text-xs text-[#087A42] font-semibold flex items-center gap-1.5">
+              <Truck className="w-4 h-4 text-[#087A42]" />
+              <span>FREE Pan-India Delivery on all products!</span>
+            </p>
           </div>
 
           {/* Cart Items List */}

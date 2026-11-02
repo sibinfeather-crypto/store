@@ -97,20 +97,45 @@ function saveStoredOrder(order: Order) {
 export const api = {
   // Settings
   async getSettings(): Promise<StoreSettings> {
+    let settings: StoreSettings = defaultSettings;
+
     try {
       const fsSettings = await getSettingsFromFirestore();
       if (fsSettings) {
-        return { ...defaultSettings, ...fsSettings };
+        settings = { ...defaultSettings, ...fsSettings };
       }
     } catch {
       // Ignore Firestore read error, proceed to API/defaults
     }
 
-    try {
-      return await safeJsonFetch<StoreSettings>(`${API_BASE}/settings`);
-    } catch {
-      return defaultSettings;
+    if (settings === defaultSettings) {
+      try {
+        const fetched = await safeJsonFetch<StoreSettings>(`${API_BASE}/settings`);
+        settings = { ...defaultSettings, ...fetched };
+      } catch {
+        settings = defaultSettings;
+      }
     }
+
+    // Sanitize removed announcement and enforce Free Shipping on all products
+    if (
+      settings.announcementText?.includes('Free Pan-India Delivery on Orders Above ₹499') ||
+      settings.freeShippingThreshold !== 0 ||
+      settings.standardShippingFee !== 0
+    ) {
+      settings.announcementText = '';
+      settings.announcementActive = false;
+      settings.freeShippingThreshold = 0;
+      settings.standardShippingFee = 0;
+      saveSettingsToFirestore({
+        announcementText: '',
+        announcementActive: false,
+        freeShippingThreshold: 0,
+        standardShippingFee: 0,
+      }).catch(() => {});
+    }
+
+    return settings;
   },
 
   async updateSettings(token: string, settings: Partial<StoreSettings>): Promise<StoreSettings> {
@@ -592,17 +617,17 @@ export const api = {
         }
       }
 
-      const shippingFee = !isFreeShip && subtotal < defaultSettings.freeShippingThreshold ? defaultSettings.standardShippingFee : 0;
+      const shippingFee = 0; // Free shipping on all products
       const total = Math.max(0, subtotal - discount + shippingFee);
 
       return {
         subtotal,
         discount,
-        shippingFee,
+        shippingFee: 0,
         total,
         verifiedItems,
-        freeShippingThreshold: defaultSettings.freeShippingThreshold,
-        amountNeededForFreeShipping: Math.max(0, defaultSettings.freeShippingThreshold - subtotal),
+        freeShippingThreshold: 0,
+        amountNeededForFreeShipping: 0,
       };
     }
   },

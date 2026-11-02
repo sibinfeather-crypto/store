@@ -272,29 +272,15 @@ export const Header: React.FC<HeaderProps> = ({ currentView, currentParam = '', 
               {/* Cart Button */}
               <button
                 onClick={() => setIsCartOpen(true)}
-                className="relative p-2 text-[#202720] hover:text-[#087A42] rounded-full hover:bg-[#F7F8F6] transition-colors cursor-pointer"
+                className="relative p-2.5 text-[#202720] hover:text-[#087A42] rounded-full hover:bg-[#F7F8F6] transition-colors cursor-pointer"
                 aria-label="Cart"
               >
                 <ShoppingBag className="w-5 h-5" />
                 {itemCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 bg-[#087A42] text-white text-[10px] font-bold w-4.5 h-4.5 rounded-full flex items-center justify-center">
+                  <span className="absolute top-0 right-0 bg-[#087A42] text-white text-[10px] font-bold w-4.5 h-4.5 rounded-full flex items-center justify-center">
                     {itemCount}
                   </span>
                 )}
-              </button>
-
-              {/* Direct Admin Portal Button */}
-              <button
-                onClick={() => onNavigate('admin')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  currentView === 'admin'
-                    ? 'bg-[#087A42] text-white shadow-xs'
-                    : 'bg-[#FFF4E5] hover:bg-[#FFE8CC] text-[#FF7900] border border-[#FF7900]/30 shadow-xs'
-                }`}
-                title="Open Admin Portal"
-              >
-                <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Admin</span>
               </button>
             </div>
           </div>
