@@ -21,6 +21,10 @@ import {
   getSettingsFromFirestore,
   getProductsFromFirestore,
   saveProductToFirestore,
+  deleteProductFromFirestore,
+  subscribeProductsFromFirestore,
+  subscribeOrdersFromFirestore,
+  subscribeSettingsFromFirestore,
   subscribeNewsletterToFirestore,
   firebaseConfig,
 } from '../firebase.ts';
@@ -132,7 +136,7 @@ export const api = {
     }
   },
 
-  // Products
+  // Products (Centralized Firestore Cloud Sync across all devices)
   async getProducts(params?: {
     search?: string;
     category?: string;
@@ -141,23 +145,7 @@ export const api = {
   }): Promise<Product[]> {
     let prods: Product[] = [];
 
-    try {
-      const searchParams = new URLSearchParams();
-      if (params?.search) searchParams.set('search', params.search);
-      if (params?.category) searchParams.set('category', params.category);
-      if (params?.sort) searchParams.set('sort', params.sort);
-      if (params?.in_stock) searchParams.set('in_stock', 'true');
-
-      const data = await safeJsonFetch<Product[]>(`${API_BASE}/products?${searchParams.toString()}`);
-      if (Array.isArray(data) && data.length > 0) {
-        localStorage.setItem('fanko_products', JSON.stringify(data));
-        return data;
-      }
-    } catch {
-      // Backend not running (e.g. static Vercel deployment) -> fallback to Firestore or local catalog
-    }
-
-    // Try Firestore if API is not returning items
+    // 1. Primary Source of Truth: Cloud Firestore
     try {
       const fsProds = await getProductsFromFirestore();
       if (Array.isArray(fsProds) && fsProds.length > 0) {
@@ -165,13 +153,32 @@ export const api = {
         localStorage.setItem('fanko_products', JSON.stringify(fsProds));
       }
     } catch (err) {
-      console.warn('Firestore fetch note:', err);
+      console.warn('Firestore fetch note, attempting API fallback:', err);
     }
 
+    // 2. Secondary fallback: Backend API
+    if (!prods || prods.length === 0) {
+      try {
+        const searchParams = new URLSearchParams();
+        if (params?.search) searchParams.set('search', params.search);
+        if (params?.category) searchParams.set('category', params.category);
+        if (params?.sort) searchParams.set('sort', params.sort);
+        if (params?.in_stock) searchParams.set('in_stock', 'true');
+
+        const data = await safeJsonFetch<Product[]>(`${API_BASE}/products?${searchParams.toString()}`);
+        if (Array.isArray(data) && data.length > 0) {
+          prods = data;
+          localStorage.setItem('fanko_products', JSON.stringify(data));
+        }
+      } catch {
+        // Backend not available (e.g. static preview/vercel)
+      }
+    }
+
+    // 3. Tertiary fallback: Local cache or default catalog
     if (!prods || prods.length === 0) {
       prods = getStoredProducts();
     }
-
     if (!prods || prods.length === 0) {
       prods = [...defaultProducts];
     }
@@ -218,95 +225,225 @@ export const api = {
   },
 
   async getProduct(idOrSlug: string): Promise<Product> {
+    // 1. Try local cache first for instant retrieval
+    const cached = getStoredProducts();
+    const cachedFound = cached.find((p) => p.slug === idOrSlug || p.id === idOrSlug);
+
+    // 2. Query Firestore Cloud Database to ensure fresh real-time price & details
+    try {
+      const fsProds = await getProductsFromFirestore();
+      const fsFound = fsProds.find((p) => p.slug === idOrSlug || p.id === idOrSlug);
+      if (fsFound) {
+        return fsFound;
+      }
+    } catch {
+      // Ignore Firestore read error
+    }
+
+    if (cachedFound) return cachedFound;
+
     try {
       return await safeJsonFetch<Product>(`${API_BASE}/products/${idOrSlug}`);
     } catch {
-      const prods = getStoredProducts();
-      const found = prods.find((p) => p.slug === idOrSlug || p.id === idOrSlug);
-      if (!found) throw new Error('Product not found');
-      return found;
+      const fallback = defaultProducts.find((p) => p.slug === idOrSlug || p.id === idOrSlug);
+      if (fallback) return fallback;
+      throw new Error('Product not found');
     }
   },
 
   async createProduct(token: string, product: Partial<Product>): Promise<Product> {
+    const slug = (product.name || 'product')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)+/g, '');
+
+    const newProd: Product = {
+      id: `prod-${Date.now()}`,
+      slug,
+      name: product.name || 'New Product',
+      sku: product.sku || `FKO-${Date.now().toString().slice(-4)}`,
+      category: product.category || 'Kitchen Essentials',
+      subCategory: product.subCategory || '',
+      description: product.description || '',
+      shortDescription: product.shortDescription || product.description?.slice(0, 120) || '',
+      price: Number(product.price) || 499,
+      salePrice: product.salePrice && Number(product.salePrice) > 0 ? Number(product.salePrice) : undefined,
+      stock: Number(product.stock ?? 10),
+      status: (Number(product.stock ?? 10) <= 0 ? 'out_of_stock' : (Number(product.stock ?? 10) <= 5 ? 'low_stock' : 'in_stock')) as any,
+      images: product.images?.length ? product.images : ['/assets/aistudio/fankostore.logo_1f90e1f5.png'],
+      specifications: product.specifications || {},
+      dimensions: product.dimensions || '',
+      material: product.material || '',
+      shippingInfo: 'Standard 3-5 business days across India.',
+      isIncomplete: Boolean(product.isIncomplete),
+      incompleteNotes: product.incompleteNotes || '',
+      featured: Boolean(product.featured),
+      isNewArrival: product.isNewArrival !== undefined ? Boolean(product.isNewArrival) : true,
+      rating: 4.8,
+      reviewCount: 1,
+      createdAt: new Date().toISOString(),
+    };
+
+    // 1. CRITICAL: Save directly to Firestore Cloud Database
     try {
-      return await safeJsonFetch<Product>(`${API_BASE}/products`, {
+      await saveProductToFirestore(newProd);
+      console.info('Product created and synced to Firestore:', newProd.id);
+    } catch (err) {
+      console.warn('Could not sync created product to Firestore:', err);
+    }
+
+    // 2. Sync to backend API if available
+    try {
+      await safeJsonFetch<Product>(`${API_BASE}/products`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(product),
+        body: JSON.stringify(newProd),
       });
     } catch {
-      const prods = getStoredProducts();
-      const newProd: Product = {
-        id: `prod-${Date.now()}`,
-        slug: (product.name || 'product')
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/(^-|-$)+/g, ''),
-        name: product.name || 'New Product',
-        sku: product.sku || `FKO-${Date.now().toString().slice(-4)}`,
-        category: product.category || 'Kitchen Essentials',
-        description: product.description || '',
-        shortDescription: product.shortDescription || '',
-        price: Number(product.price) || 499,
-        salePrice: product.salePrice ? Number(product.salePrice) : undefined,
-        stock: Number(product.stock ?? 10),
-        status: (product.stock && product.stock > 0 ? (product.stock <= 5 ? 'low_stock' : 'in_stock') : 'out_of_stock') as any,
-        images: product.images?.length ? product.images : ['/assets/aistudio/fankostore.logo_1f90e1f5.png'],
-        specifications: product.specifications || {},
-        dimensions: product.dimensions || '',
-        material: product.material || '',
-        shippingInfo: 'Standard 3-5 business days across India.',
-        isIncomplete: Boolean(product.isIncomplete),
-        incompleteNotes: product.incompleteNotes || '',
-        featured: false,
-        isNewArrival: true,
-        rating: 4.8,
-        reviewCount: 1,
-        createdAt: new Date().toISOString(),
-      };
-      prods.unshift(newProd);
-      localStorage.setItem('fanko_products', JSON.stringify(prods));
-      return newProd;
+      // Backend not running / static host
     }
+
+    // 3. Update local storage cache
+    const prods = getStoredProducts();
+    const updatedList = [newProd, ...prods.filter((p) => p.id !== newProd.id)];
+    localStorage.setItem('fanko_products', JSON.stringify(updatedList));
+
+    return newProd;
   },
 
   async updateProduct(token: string, id: string, product: Partial<Product>): Promise<Product> {
+    // 1. Locate existing product to preserve attributes
+    let existing: Product | undefined;
     try {
-      return await safeJsonFetch<Product>(`${API_BASE}/products/${id}`, {
+      const fsProds = await getProductsFromFirestore();
+      existing = fsProds.find((p) => p.id === id);
+    } catch {
+      // Ignore
+    }
+    if (!existing) {
+      existing = getStoredProducts().find((p) => p.id === id) || defaultProducts.find((p) => p.id === id);
+    }
+
+    const updatedPrice = product.price !== undefined ? Number(product.price) : (existing?.price ?? 499);
+    const updatedSalePrice =
+      product.salePrice !== undefined && (product.salePrice as any) !== ''
+        ? Number(product.salePrice)
+        : existing?.salePrice;
+    const updatedStock = product.stock !== undefined ? Number(product.stock) : (existing?.stock ?? 10);
+    const updatedStatus = updatedStock <= 0 ? 'out_of_stock' : updatedStock <= 5 ? 'low_stock' : 'in_stock';
+
+    const mergedProduct: Product = {
+      id,
+      slug: (product.name || existing?.name || 'product').toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+      name: product.name || existing?.name || 'Updated Product',
+      sku: product.sku || existing?.sku || `FKO-${id}`,
+      category: product.category || existing?.category || 'Kitchen Essentials',
+      subCategory: product.subCategory !== undefined ? product.subCategory : (existing?.subCategory || ''),
+      description: product.description !== undefined ? product.description : (existing?.description || ''),
+      shortDescription: product.shortDescription !== undefined ? product.shortDescription : (existing?.shortDescription || ''),
+      dimensions: product.dimensions !== undefined ? product.dimensions : (existing?.dimensions || ''),
+      material: product.material !== undefined ? product.material : (existing?.material || ''),
+      shippingInfo: product.shippingInfo || existing?.shippingInfo || 'Standard 3-5 business days across India.',
+      images: product.images && product.images.length ? product.images : (existing?.images || ['/assets/aistudio/fankostore.logo_1f90e1f5.png']),
+      specifications: product.specifications || existing?.specifications || {},
+      isIncomplete: product.isIncomplete !== undefined ? Boolean(product.isIncomplete) : Boolean(existing?.isIncomplete),
+      incompleteNotes: product.incompleteNotes !== undefined ? product.incompleteNotes : (existing?.incompleteNotes || ''),
+      featured: product.featured !== undefined ? Boolean(product.featured) : Boolean(existing?.featured),
+      isNewArrival: product.isNewArrival !== undefined ? Boolean(product.isNewArrival) : Boolean(existing?.isNewArrival),
+      rating: existing?.rating ?? 4.8,
+      reviewCount: existing?.reviewCount ?? 1,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      price: updatedPrice,
+      salePrice: updatedSalePrice,
+      stock: updatedStock,
+      status: updatedStatus as any,
+    };
+
+    // 2. CRITICAL: Persist to Firestore Cloud Database
+    // This immediately syncs the updated price to ALL OTHER DEVICES worldwide
+    try {
+      await saveProductToFirestore(mergedProduct);
+      console.info('Product successfully synced to Firestore cloud DB:', mergedProduct.id, 'Price:', mergedProduct.price);
+    } catch (err) {
+      console.error('Failed to save product to Firestore cloud DB:', err);
+    }
+
+    // 3. Best-effort sync to local Express server API
+    try {
+      await safeJsonFetch<Product>(`${API_BASE}/products/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(product),
+        body: JSON.stringify(mergedProduct),
       });
     } catch {
-      const prods = getStoredProducts();
-      const idx = prods.findIndex((p) => p.id === id);
-      if (idx !== -1) {
-        prods[idx] = { ...prods[idx], ...product };
-        localStorage.setItem('fanko_products', JSON.stringify(prods));
-        return prods[idx];
-      }
-      throw new Error('Product not found');
+      // Backend not running / static host
     }
+
+    // 4. Update local storage cache for immediate local UI responsiveness
+    const prods = getStoredProducts();
+    const idx = prods.findIndex((p) => p.id === id);
+    if (idx !== -1) {
+      prods[idx] = mergedProduct;
+    } else {
+      prods.unshift(mergedProduct);
+    }
+    localStorage.setItem('fanko_products', JSON.stringify(prods));
+
+    return mergedProduct;
   },
 
   async deleteProduct(token: string, id: string): Promise<boolean> {
+    // 1. Delete from Firestore Cloud Database
+    try {
+      await deleteProductFromFirestore(id);
+      console.info('Product deleted from Firestore:', id);
+    } catch (err) {
+      console.warn('Could not delete product from Firestore:', err);
+    }
+
+    // 2. Delete from API backend
     try {
       await safeJsonFetch(`${API_BASE}/products/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
     } catch {
-      const prods = getStoredProducts().filter((p) => p.id !== id);
-      localStorage.setItem('fanko_products', JSON.stringify(prods));
+      // Ignore
     }
+
+    // 3. Remove from local storage
+    const prods = getStoredProducts().filter((p) => p.id !== id);
+    localStorage.setItem('fanko_products', JSON.stringify(prods));
     return true;
+  },
+
+  // Real-time product subscription across devices
+  subscribeProducts(callback: (products: Product[]) => void): () => void {
+    return subscribeProductsFromFirestore((liveProducts) => {
+      localStorage.setItem('fanko_products', JSON.stringify(liveProducts));
+      callback(liveProducts);
+    });
+  },
+
+  // Real-time order subscription across devices
+  subscribeOrders(callback: (orders: Order[]) => void): () => void {
+    return subscribeOrdersFromFirestore((liveOrders) => {
+      localStorage.setItem('fanko_orders', JSON.stringify(liveOrders));
+      callback(liveOrders);
+    });
+  },
+
+  // Real-time store settings subscription across devices
+  subscribeSettings(callback: (settings: StoreSettings) => void): () => void {
+    return subscribeSettingsFromFirestore((liveSettings) => {
+      callback(liveSettings);
+    });
   },
 
   // Categories
@@ -557,11 +694,15 @@ export const api = {
     paymentProofUrl?: string;
   }): Promise<{ success: boolean; order: Order }> {
     try {
-      return await safeJsonFetch(`${API_BASE}/orders/upi`, {
+      const res = await safeJsonFetch<{ success: boolean; order: Order }>(`${API_BASE}/orders/upi`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
+      if (res && res.order) {
+        saveStoredOrder(res.order);
+      }
+      return res;
     } catch {
       const orderNumber = `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
       const calculation = await api.calculateOrder(data.items, data.couponCode);
@@ -623,11 +764,15 @@ export const api = {
     paymentProofUrl?: string;
   }): Promise<{ success: boolean; order: Order }> {
     try {
-      return await safeJsonFetch(`${API_BASE}/orders/cod`, {
+      const res = await safeJsonFetch<{ success: boolean; order: Order }>(`${API_BASE}/orders/cod`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
+      if (res && res.order) {
+        saveStoredOrder(res.order);
+      }
+      return res;
     } catch {
       const orderNumber = `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
       const calculation = await api.calculateOrder(data.items, data.couponCode);
@@ -680,18 +825,49 @@ export const api = {
     }
   },
 
-  // Order Details & Tracking
+  // Order Details & Tracking (Cross-Device Cloud Sync via Firestore)
   async getOrder(idOrNumber: string): Promise<Order> {
+    const local = getStoredOrders().find((o) => o.id === idOrNumber || o.orderNumber === idOrNumber);
+    if (local) return local;
+
+    try {
+      const fsOrders = await getOrdersFromFirestore();
+      const fsMatch = fsOrders.find((o) => o.id === idOrNumber || o.orderNumber === idOrNumber);
+      if (fsMatch) {
+        saveStoredOrder(fsMatch);
+        return fsMatch;
+      }
+    } catch {
+      // Ignore
+    }
+
     try {
       return await safeJsonFetch(`${API_BASE}/orders/${idOrNumber}`);
     } catch {
-      const order = getStoredOrders().find((o) => o.id === idOrNumber || o.orderNumber === idOrNumber);
-      if (!order) throw new Error('Order not found');
-      return order;
+      throw new Error('Order not found');
     }
   },
 
   async trackOrder(orderNumber: string, contact?: string): Promise<Order> {
+    const cleanNum = orderNumber.trim().toUpperCase();
+
+    // 1. Check local storage
+    const local = getStoredOrders().find((o) => o.orderNumber.toUpperCase() === cleanNum);
+    if (local) return local;
+
+    // 2. Query Cloud Firestore
+    try {
+      const fsOrders = await getOrdersFromFirestore();
+      const fsMatch = fsOrders.find((o) => o.orderNumber.toUpperCase() === cleanNum);
+      if (fsMatch) {
+        saveStoredOrder(fsMatch);
+        return fsMatch;
+      }
+    } catch {
+      // Ignore
+    }
+
+    // 3. Fallback to API / simulated tracking record
     try {
       const params = new URLSearchParams({ orderNumber });
       if (contact) params.set('contact', contact);
@@ -802,8 +978,9 @@ export const api = {
       note?: string;
     }
   ): Promise<Order> {
+    let order: Order | null = null;
     try {
-      return await safeJsonFetch(`${API_BASE}/admin/orders/${orderId}/status`, {
+      order = await safeJsonFetch<Order>(`${API_BASE}/admin/orders/${orderId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -813,16 +990,18 @@ export const api = {
       });
     } catch {
       const orders = getStoredOrders();
-      const order = orders.find((o) => o.id === orderId);
+      order = orders.find((o) => o.id === orderId) || null;
       if (!order) throw new Error('Order not found');
       if (updates.fulfillmentStatus) order.fulfillmentStatus = updates.fulfillmentStatus as any;
       if (updates.paymentStatus) order.paymentStatus = updates.paymentStatus as any;
       if (updates.courierName) order.shippingDetails.courierName = updates.courierName;
       if (updates.trackingNumber) order.shippingDetails.trackingNumber = updates.trackingNumber;
       order.updatedAt = new Date().toISOString();
-      localStorage.setItem('fanko_orders', JSON.stringify(orders));
-      return order;
     }
+    if (order) {
+      saveStoredOrder(order);
+    }
+    return order;
   },
 
   async getAdminStats(token: string): Promise<{

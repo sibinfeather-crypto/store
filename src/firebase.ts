@@ -8,6 +8,8 @@ import {
   setDoc,
   addDoc,
   updateDoc,
+  deleteDoc,
+  onSnapshot,
   query,
   orderBy,
   getDocFromServer,
@@ -15,6 +17,7 @@ import {
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import type { Product, Order, StoreSettings, Review } from './types/index.ts';
+import { defaultProducts } from './data/storeDefaults.ts';
 
 import firebaseAppletConfig from '../firebase-applet-config.json';
 
@@ -57,23 +60,59 @@ const REVIEWS_COLLECTION = 'reviews';
 const NEWSLETTER_COLLECTION = 'newsletter';
 
 /**
- * Fetch all products from Firestore
+ * Fetch all products from Firestore, auto-seeding defaults if collection is empty
  */
 export async function getProductsFromFirestore(): Promise<Product[]> {
   try {
-    const q = query(collection(db, PRODUCTS_COLLECTION), orderBy('createdAt', 'desc'));
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) return [];
-    return snapshot.docs.map((docSnap) => {
+    const colRef = collection(db, PRODUCTS_COLLECTION);
+    const snapshot = await getDocs(colRef);
+    if (snapshot.empty) {
+      console.info('Firestore products collection is empty, auto-seeding default catalog...');
+      await seedProductsToFirestore(defaultProducts);
+      return [...defaultProducts];
+    }
+    const products = snapshot.docs.map((docSnap) => {
       const data = docSnap.data();
       return {
         id: docSnap.id,
         ...data,
       } as Product;
     });
+
+    // Sort newest first
+    products.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    return products;
   } catch (err) {
     console.warn('Could not read products from Firestore, falling back to local data', err);
     return [];
+  }
+}
+
+/**
+ * Real-time listener for products across all devices
+ */
+export function subscribeProductsFromFirestore(callback: (products: Product[]) => void): () => void {
+  try {
+    const colRef = collection(db, PRODUCTS_COLLECTION);
+    return onSnapshot(
+      colRef,
+      (snapshot) => {
+        if (!snapshot.empty) {
+          const prods = snapshot.docs.map((docSnap) => ({
+            id: docSnap.id,
+            ...docSnap.data(),
+          } as Product));
+          prods.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+          callback(prods);
+        }
+      },
+      (err) => {
+        console.warn('Realtime products listener error:', err);
+      }
+    );
+  } catch (e) {
+    console.warn('Could not initialize products listener:', e);
+    return () => {};
   }
 }
 
@@ -83,12 +122,29 @@ export async function getProductsFromFirestore(): Promise<Product[]> {
 export async function saveProductToFirestore(product: Product): Promise<void> {
   try {
     const docRef = doc(db, PRODUCTS_COLLECTION, product.id);
-    await setDoc(docRef, {
-      ...product,
-      updatedAt: new Date().toISOString(),
-    }, { merge: true });
+    await setDoc(
+      docRef,
+      {
+        ...product,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
   } catch (err) {
     console.error('Error saving product to Firestore:', err);
+    throw err;
+  }
+}
+
+/**
+ * Delete a product from Firestore
+ */
+export async function deleteProductFromFirestore(productId: string): Promise<void> {
+  try {
+    const docRef = doc(db, PRODUCTS_COLLECTION, productId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.error('Error deleting product from Firestore:', err);
     throw err;
   }
 }
@@ -143,6 +199,31 @@ export async function getOrdersFromFirestore(): Promise<Order[]> {
 }
 
 /**
+ * Real-time listener for orders across all devices
+ */
+export function subscribeOrdersFromFirestore(callback: (orders: Order[]) => void): () => void {
+  try {
+    const q = query(collection(db, ORDERS_COLLECTION), orderBy('createdAt', 'desc'));
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const orders = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        } as Order));
+        callback(orders);
+      },
+      (err) => {
+        console.warn('Realtime orders listener error:', err);
+      }
+    );
+  } catch (e) {
+    console.warn('Could not initialize orders listener:', e);
+    return () => {};
+  }
+}
+
+/**
  * Fetch store settings from Firestore
  */
 export async function getSettingsFromFirestore(): Promise<StoreSettings | null> {
@@ -156,6 +237,29 @@ export async function getSettingsFromFirestore(): Promise<StoreSettings | null> 
   } catch (err) {
     console.warn('Could not read settings from Firestore:', err);
     return null;
+  }
+}
+
+/**
+ * Real-time listener for store settings across all devices
+ */
+export function subscribeSettingsFromFirestore(callback: (settings: StoreSettings) => void): () => void {
+  try {
+    const docRef = doc(db, SETTINGS_COLLECTION, 'global_config');
+    return onSnapshot(
+      docRef,
+      (snap) => {
+        if (snap.exists()) {
+          callback(snap.data() as StoreSettings);
+        }
+      },
+      (err) => {
+        console.warn('Realtime settings listener error:', err);
+      }
+    );
+  } catch (e) {
+    console.warn('Could not initialize settings listener:', e);
+    return () => {};
   }
 }
 

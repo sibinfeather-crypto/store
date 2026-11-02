@@ -179,6 +179,32 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
     }
   }, [isAdminLoggedIn, adminToken]);
 
+  // Real-time cloud sync: updates prices, inventory, and incoming orders automatically when changed from any device
+  useEffect(() => {
+    if (isAdminLoggedIn) {
+      const unsubProducts = api.subscribeProducts((liveProds) => {
+        if (liveProds && liveProds.length > 0) {
+          setProducts(liveProds);
+        }
+      });
+      const unsubOrders = api.subscribeOrders((liveOrders) => {
+        if (liveOrders) {
+          setOrders(liveOrders);
+        }
+      });
+      const unsubSettings = api.subscribeSettings((liveSettings) => {
+        if (liveSettings) {
+          setSettings(liveSettings);
+        }
+      });
+      return () => {
+        unsubProducts();
+        unsubOrders();
+        unsubSettings();
+      };
+    }
+  }, [isAdminLoggedIn]);
+
   const loadAdminData = async () => {
     if (!adminToken) return;
     setLoadingData(true);
@@ -912,9 +938,15 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
         <div className="bg-white rounded-3xl border border-[#E5E8E3] p-6 sm:p-8 shadow-xs space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#E5E8E3]">
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-[#202720]">Product Catalog & Pricing</h2>
-              <p className="text-xs text-[#5E695E]">
-                Add new products, adjust regular and sale prices, update inventory quantities, or edit detailed product specifications.
+              <div className="flex items-center gap-2">
+                <h2 className="text-base sm:text-lg font-bold text-[#202720]">Product Catalog & Pricing</h2>
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-[#087A42] border border-emerald-200">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#087A42] animate-pulse"></span>
+                  Cloud Synced
+                </span>
+              </div>
+              <p className="text-xs text-[#5E695E] mt-0.5">
+                Add new products, adjust regular and sale prices, and manage inventory. All price changes instantly sync across every device in real-time.
               </p>
             </div>
             <button

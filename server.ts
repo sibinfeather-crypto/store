@@ -186,17 +186,14 @@ app.post('/api/products', requireAdmin, (req, res) => {
 
 app.put('/api/products/:id', requireAdmin, (req, res) => {
   const existing = db.getProductById(req.params.id);
-  if (!existing) {
-    return res.status(404).json({ error: 'Product not found' });
-  }
 
   const updated = {
-    ...existing,
+    ...(existing || {}),
     ...req.body,
-    id: existing.id,
-    price: req.body.price !== undefined ? Number(req.body.price) : existing.price,
-    salePrice: req.body.salePrice !== undefined && req.body.salePrice !== '' ? Number(req.body.salePrice) : undefined,
-    stock: req.body.stock !== undefined ? Number(req.body.stock) : existing.stock,
+    id: req.params.id,
+    price: req.body.price !== undefined ? Number(req.body.price) : (existing?.price ?? 499),
+    salePrice: req.body.salePrice !== undefined && req.body.salePrice !== '' ? Number(req.body.salePrice) : (req.body.salePrice === '' ? undefined : existing?.salePrice),
+    stock: req.body.stock !== undefined ? Number(req.body.stock) : (existing?.stock ?? 10),
   };
 
   if (updated.stock <= 0) {

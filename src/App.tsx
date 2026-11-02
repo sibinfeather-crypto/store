@@ -193,6 +193,25 @@ export default function App() {
         setCategories(defaultCategories);
         setLoading(false);
       });
+
+    // Real-time listeners: syncs price, inventory, and store settings across all devices instantly
+    const unsubscribeProducts = api.subscribeProducts((liveProds) => {
+      if (liveProds && liveProds.length > 0) {
+        setProducts(liveProds);
+      }
+    });
+
+    const unsubscribeSettings = api.subscribeSettings((liveSettings) => {
+      if (liveSettings) {
+        if (liveSettings.whatsappNumber) setWhatsappNumber(liveSettings.whatsappNumber);
+        if (liveSettings.supportEmail) setSupportEmail(liveSettings.supportEmail);
+      }
+    });
+
+    return () => {
+      unsubscribeProducts();
+      unsubscribeSettings();
+    };
   }, []);
 
   // Listen to browser Back and Forward history buttons
