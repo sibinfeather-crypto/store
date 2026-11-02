@@ -60,11 +60,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onNavigate }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden">
+    <div className="fixed inset-0 z-[100] overflow-hidden">
       {/* Backdrop */}
       <div
         onClick={() => setIsCartOpen(false)}
-        className="absolute inset-0 bg-black/40 backdrop-blur-xs transition-opacity"
+        className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity cursor-pointer"
       />
 
       <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
