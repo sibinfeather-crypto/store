@@ -7,6 +7,7 @@ import type {
   PincodeInfo,
   ShippingAddress,
   OrderItem,
+  VerifiedPaymentScreenshot,
 } from '../types/index.ts';
 import {
   defaultProducts,
@@ -704,6 +705,31 @@ export const api = {
         paytmUri: `paytmmp://pay?${baseQuery}`,
         qrCodeUrl: finalQr,
         customQrActive: settings.upiQrMode === 'custom' && Boolean(settings.customUpiQrUrl),
+      };
+    }
+  },
+
+  // Live AI Vision Screenshot Verification
+  async verifyPaymentScreenshot(data: {
+    screenshot: string;
+    expectedAmount: number;
+    expectedUpiId?: string;
+    orderType?: 'upi' | 'cod';
+  }): Promise<VerifiedPaymentScreenshot> {
+    try {
+      return await safeJsonFetch<VerifiedPaymentScreenshot>(`${API_BASE}/upi/verify-screenshot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+    } catch (err: any) {
+      console.warn('Screenshot verification network or server error:', err);
+      // In case server is offline or fails, return a safe rejection with descriptive error
+      return {
+        isValid: false,
+        isUpiScreenshot: false,
+        isPaymentSuccessful: false,
+        rejectionReason: err.message || 'Unable to verify screenshot right now. Please check your network and upload a clear screenshot of the successful payment.',
       };
     }
   },

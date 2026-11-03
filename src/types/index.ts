@@ -131,6 +131,19 @@ export interface OrderPaymentDetails {
   mxpayStatus?: string;
 }
 
+export interface VerifiedPaymentScreenshot {
+  isValid: boolean;
+  isUpiScreenshot: boolean;
+  isPaymentSuccessful: boolean;
+  appName?: string;
+  detectedAmount?: number;
+  amountMatches?: boolean;
+  detectedDateTime?: string;
+  detectedUtr?: string;
+  isRecent?: boolean;
+  rejectionReason?: string;
+}
+
 export interface Order {
   id: string;
   orderNumber: string; // e.g., FKO-2026-1042

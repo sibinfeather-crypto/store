@@ -4,8 +4,18 @@ import path from 'path';
 import crypto from 'crypto';
 import { db, hashPassword, generateSalt } from './server/db.ts';
 import type { Order, ShippingAddress, OrderItem } from './src/types/index.ts';
+import { GoogleGenAI, Type } from '@google/genai';
 
 dotenv.config();
+
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    },
+  },
+});
 
 const app = express();
 const PORT = 3000;
@@ -480,6 +490,117 @@ app.post('/api/upi/generate-intent', (req, res) => {
   });
 });
 
+// Live AI-Powered UPI Payment Screenshot Verification Endpoint
+app.post('/api/upi/verify-screenshot', async (req, res) => {
+  const { screenshot, expectedAmount, expectedUpiId, orderType } = req.body;
+
+  if (!screenshot || typeof screenshot !== 'string') {
+    return res.status(400).json({
+      isValid: false,
+      rejectionReason: 'Payment screenshot image is required.',
+    });
+  }
+
+  const numericExpectedAmount = Number(expectedAmount) || 0;
+
+  try {
+    let mimeType = 'image/jpeg';
+    let base64Data = screenshot;
+    if (screenshot.includes(';base64,')) {
+      const parts = screenshot.split(';base64,');
+      mimeType = parts[0].replace('data:', '') || 'image/jpeg';
+      base64Data = parts[1];
+    }
+
+    const imagePart = {
+      inlineData: {
+        mimeType,
+        data: base64Data,
+      },
+    };
+
+    const prompt = `You are a strict, automated Indian UPI payment verification specialist for an online store.
+Carefully inspect this image and determine if it is an authentic, successful UPI payment confirmation screenshot receipt from an Indian payment app (Google Pay, PhonePe, Paytm, BHIM, Cred, Amazon Pay, Axis Bank, HDFC, ICICI, SBI, or other Indian bank UPI apps).
+
+Expected Payment Amount: ₹${numericExpectedAmount}
+Expected Store UPI ID: ${expectedUpiId || 'Store UPI'}
+Order Type: ${orderType === 'cod' ? 'COD Advance Token (₹99)' : 'Full Payment'}
+
+STRICT REJECTION RULES (Set isValid: false if ANY rule fails):
+1. FAKE OR NON-PAYMENT IMAGE: If this is NOT a payment receipt (e.g. it is a photo of a person, animal, nature, selfie, meme, product, clothing, document, bank balance screen, random phone screenshot, blank or blurry image): Set isUpiScreenshot: false, isValid: false, rejectionReason: "The uploaded file is not a valid UPI payment receipt. Please upload an authentic payment screenshot."
+2. TRANSACTION STATUS NOT SUCCESSFUL: If the transaction status shows Failed, Pending, Declined, Cancelled, or Incomplete: Set isPaymentSuccessful: false, isValid: false, rejectionReason: "Payment has not succeeded (shows pending, failed, or incomplete). Please complete payment and upload the successful receipt."
+3. AMOUNT MISMATCH: If the paid amount is less than ₹${numericExpectedAmount}: Set amountMatches: false, isValid: false, rejectionReason: "Amount mismatch: Expected ₹${numericExpectedAmount}, but screenshot shows a different amount."
+4. NO DATE OR TIME: If the payment date and time cannot be identified or is from an outdated/old transaction: Set isRecent: false, isValid: false, rejectionReason: "Payment date & time is missing or outdated. Please upload a fresh live screenshot of today's payment."
+
+VALIDATION RULES (Set isValid: true ONLY when ALL criteria pass):
+- The image clearly displays a completed, successful UPI payment with green tick/success badge, matching amount of at least ₹${numericExpectedAmount}, live timestamp/date, and transaction reference/UTR.
+
+Extract:
+- isUpiScreenshot (boolean)
+- isPaymentSuccessful (boolean)
+- appName (string, e.g. "Google Pay", "PhonePe", "Paytm", "BHIM", "Bank UPI")
+- detectedAmount (number)
+- amountMatches (boolean)
+- detectedDateTime (string, exact payment date and time visible on receipt)
+- detectedUtr (string, 12-digit UPI reference number or transaction ID, or "N/A" if not found)
+- isRecent (boolean)
+- isValid (boolean, true ONLY if real UPI screenshot, payment was successful, and amount matches)
+- rejectionReason (string or null, friendly explanation if isValid is false)`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: {
+        parts: [imagePart, { text: prompt }],
+      },
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            isUpiScreenshot: { type: Type.BOOLEAN },
+            isPaymentSuccessful: { type: Type.BOOLEAN },
+            appName: { type: Type.STRING },
+            detectedAmount: { type: Type.NUMBER },
+            amountMatches: { type: Type.BOOLEAN },
+            detectedDateTime: { type: Type.STRING },
+            detectedUtr: { type: Type.STRING },
+            isRecent: { type: Type.BOOLEAN },
+            isValid: { type: Type.BOOLEAN },
+            rejectionReason: { type: Type.STRING },
+          },
+          required: ['isUpiScreenshot', 'isPaymentSuccessful', 'isValid'],
+        },
+      },
+    });
+
+    const parsed = JSON.parse(response.text || '{}');
+
+    // Duplicate UTR prevention check: ensure same UTR isn't used across multiple orders
+    if (parsed.isValid && parsed.detectedUtr && parsed.detectedUtr !== 'N/A' && parsed.detectedUtr.length >= 8) {
+      const allOrders = db.getOrders();
+      const duplicateOrder = allOrders.find(
+        (o) => o.paymentDetails?.utrNumber === parsed.detectedUtr
+      );
+      if (duplicateOrder) {
+        return res.json({
+          isValid: false,
+          isUpiScreenshot: true,
+          rejectionReason: `This payment receipt (UTR: ${parsed.detectedUtr}) has already been used for order #${duplicateOrder.orderNumber}. Each payment can only be verified once.`,
+        });
+      }
+    }
+
+    return res.json(parsed);
+  } catch (err: any) {
+    console.error('Error during AI screenshot verification:', err);
+    return res.status(500).json({
+      isValid: false,
+      rejectionReason: 'Unable to analyze screenshot at this moment. Please ensure the image is clear and try again.',
+      error: err.message,
+    });
+  }
+});
+
 // Full UPI Payment Checkout Endpoint
 app.post('/api/orders/upi', (req, res) => {
   const { customer, items, couponCode, upiApp, utrNumber, payerUpiId, paymentProofUrl } = req.body;
@@ -493,7 +614,12 @@ app.post('/api/orders/upi', (req, res) => {
     return res.status(400).json({ error: 'Customer details and cart items are required.' });
   }
 
-  // Automatic payment confirmation: UTR is not required
+  // Strictly require uploaded verified payment screenshot before confirming order
+  if (!paymentProofUrl || typeof paymentProofUrl !== 'string' || paymentProofUrl.length < 50) {
+    return res.status(400).json({ error: 'Valid payment screenshot proof is required before your order can be confirmed.' });
+  }
+
+  // Payment confirmation UTR
   const cleanUtr = typeof utrNumber === 'string' && utrNumber.trim().length >= 4
     ? utrNumber.trim()
     : `AUTO-UPI-${Date.now().toString().slice(-8)}`;
@@ -608,7 +734,12 @@ app.post('/api/orders/cod', (req, res) => {
     return res.status(400).json({ error: 'Customer details and cart items are required' });
   }
 
-  // Automatic advance payment confirmation: UTR is not required
+  // Strictly require uploaded verified advance payment screenshot before confirming COD order
+  if (!paymentProofUrl || typeof paymentProofUrl !== 'string' || paymentProofUrl.length < 50) {
+    return res.status(400).json({ error: 'Valid payment screenshot proof is required before your Cash on Delivery order can be confirmed.' });
+  }
+
+  // Advance payment confirmation UTR
   const cleanUtr = typeof utrNumber === 'string' && utrNumber.trim().length >= 4
     ? utrNumber.trim()
     : `AUTO-COD-ADV-${Date.now().toString().slice(-8)}`;

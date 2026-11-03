@@ -31,7 +31,7 @@ import {
 import { useCart } from '../context/CartContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { api } from '../services/api.ts';
-import type { ShippingAddress, Order } from '../types/index.ts';
+import type { ShippingAddress, Order, VerifiedPaymentScreenshot } from '../types/index.ts';
 
 interface CheckoutViewProps {
   onNavigate: (view: string, param?: string) => void;
@@ -95,6 +95,9 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   const [screenshotFileSize, setScreenshotFileSize] = useState<string | null>(null);
   const [screenshotError, setScreenshotError] = useState<string | null>(null);
   const [isCompressingProof, setIsCompressingProof] = useState<boolean>(false);
+  const [isVerifyingScreenshot, setIsVerifyingScreenshot] = useState<boolean>(false);
+  const [verifiedPaymentInfo, setVerifiedPaymentInfo] = useState<VerifiedPaymentScreenshot | null>(null);
+  const [verificationProgressText, setVerificationProgressText] = useState<string>('');
   const [isDragOver, setIsDragOver] = useState<boolean>(false);
   const [showScreenshotWarning, setShowScreenshotWarning] = useState<boolean>(false);
   const [previewScreenshotModal, setPreviewScreenshotModal] = useState<boolean>(false);
@@ -202,12 +205,15 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       setAppOpened(false);
       setVerificationStatus(null);
       setIsProcessing(false);
-      // Reset payment screenshot state for new payment session
+      // Reset payment screenshot and AI verification state for new payment session
       setPaymentProofUrl(null);
       setScreenshotFileName(null);
       setScreenshotFileSize(null);
       setScreenshotError(null);
       setShowScreenshotWarning(false);
+      setVerifiedPaymentInfo(null);
+      setIsVerifyingScreenshot(false);
+      setVerificationProgressText('');
     } catch (err: any) {
       setIsProcessing(false);
       setError(err.message || 'Failed to initialize payment. Please try again.');
@@ -256,7 +262,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     });
   };
 
-  // Process selected or dropped screenshot file
+  // Process selected or dropped screenshot file with Live AI Vision Verification
   const handleProcessScreenshotFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       setScreenshotError('Please select a valid image file (PNG, JPG, JPEG, WEBP).');
@@ -271,22 +277,72 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     setIsCompressingProof(true);
     setScreenshotError(null);
     setShowScreenshotWarning(false);
+    setPaymentProofUrl(null);
+    setVerifiedPaymentInfo(null);
 
     try {
+      // Step 1: Compress image client-side to ensure fast vision AI response
       const compressedDataUrl = await compressImage(file);
       const sizeInKb = Math.round((compressedDataUrl.length * 3) / 4 / 1024);
+      setIsCompressingProof(false);
+
+      // Step 2: Trigger Live Gemini Vision AI Verification
+      setIsVerifyingScreenshot(true);
+      setVerificationProgressText('Inspecting screenshot: validating UPI payment status, exact amount & date/time...');
+
+      const amountToVerify = upiModalData?.amountToPay ?? (paymentMethod === 'cod' ? codAdvanceAmount : total);
+      const upiToVerify = upiModalData?.upiId || storeUpiId;
+      const orderTypeToVerify = upiModalData?.paymentType || paymentMethod;
+
+      const verification = await api.verifyPaymentScreenshot({
+        screenshot: compressedDataUrl,
+        expectedAmount: amountToVerify,
+        expectedUpiId: upiToVerify,
+        orderType: orderTypeToVerify,
+      });
+
+      setIsVerifyingScreenshot(false);
+      setVerificationProgressText('');
+
+      // Step 3: Strictly Reject Fake or Non-Payment Images!
+      if (!verification.isValid) {
+        setPaymentProofUrl(null);
+        setVerifiedPaymentInfo(null);
+        setScreenshotFileName(null);
+        setScreenshotFileSize(null);
+        const reason = verification.rejectionReason || 'Invalid payment receipt. Please upload an authentic screenshot showing the successful payment, amount, and date & time.';
+        setScreenshotError(reason);
+        setShowScreenshotWarning(true);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+
+      // Step 4: Verification Passed - Store genuine screenshot & verified metadata
       setPaymentProofUrl(compressedDataUrl);
+      setVerifiedPaymentInfo(verification);
       setScreenshotFileName(file.name);
       setScreenshotFileSize(`${sizeInKb} KB`);
+      setScreenshotError(null);
+      setShowScreenshotWarning(false);
+    } catch (err: any) {
       setIsCompressingProof(false);
-    } catch {
-      setIsCompressingProof(false);
-      setScreenshotError('Could not process screenshot image. Please try another file.');
+      setIsVerifyingScreenshot(false);
+      setVerificationProgressText('');
+      setPaymentProofUrl(null);
+      setVerifiedPaymentInfo(null);
+      setScreenshotError(err.message || 'Verification could not be completed. Please ensure image is clear and try again.');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
   const handleRemoveScreenshot = () => {
     setPaymentProofUrl(null);
+    setVerifiedPaymentInfo(null);
+    setIsVerifyingScreenshot(false);
     setScreenshotFileName(null);
     setScreenshotFileSize(null);
     setScreenshotError(null);
@@ -367,14 +423,16 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     document.body.removeChild(link);
   };
 
-  // Order Confirmation: ONLY allowed when buyer has uploaded their payment screenshot!
+  // Order Confirmation: ONLY allowed when buyer has uploaded an authentic, verified payment screenshot!
   const handleConfirmOrderWithScreenshot = async () => {
     if (!upiModalData) return;
 
-    // Buyer payment screenshot is strictly required before order confirmation
-    if (!paymentProofUrl) {
+    // Buyer payment screenshot is strictly required before order confirmation AND MUST BE VERIFIED
+    if (!paymentProofUrl || !verifiedPaymentInfo || !verifiedPaymentInfo.isValid) {
       setShowScreenshotWarning(true);
-      setScreenshotError('Payment screenshot is required to confirm your order. Please upload your payment proof above.');
+      setScreenshotError(
+        'Authentic payment screenshot is required. Please upload your payment screenshot showing date & time for live AI verification before confirming.'
+      );
       if (fileInputRef.current) {
         fileInputRef.current.click();
       }
@@ -382,7 +440,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     }
 
     setIsProcessing(true);
-    setVerificationStatus('Verifying payment screenshot and placing order...');
+    setVerificationStatus('Finalizing order with verified payment receipt...');
     setError(null);
 
     try {
@@ -392,6 +450,9 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       }));
 
       const targetApp = selectedApp || 'other';
+      const extractedUtr = verifiedPaymentInfo.detectedUtr && verifiedPaymentInfo.detectedUtr !== 'N/A'
+        ? verifiedPaymentInfo.detectedUtr
+        : undefined;
 
       let result: { success: boolean; order: Order };
       if (upiModalData.paymentType === 'cod') {
@@ -400,6 +461,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
           items: payloadItems,
           couponCode: couponCode || undefined,
           upiApp: targetApp,
+          utrNumber: extractedUtr,
           paymentProofUrl: paymentProofUrl,
         });
       } else {
@@ -408,6 +470,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
           items: payloadItems,
           couponCode: couponCode || undefined,
           upiApp: targetApp,
+          utrNumber: extractedUtr,
           paymentProofUrl: paymentProofUrl,
         });
       }
@@ -416,6 +479,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       setIsProcessing(false);
       setUpiModalData(null);
       setPaymentProofUrl(null);
+      setVerifiedPaymentInfo(null);
       setScreenshotFileName(null);
       setVerificationStatus(null);
       onOrderCompleted(result.order);
@@ -1058,8 +1122,133 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 </span>
               </div>
 
-              {/* Upload Zone when NO screenshot attached */}
-              {!paymentProofUrl ? (
+              {/* AI Vision Verification In-Progress Card */}
+              {(isCompressingProof || isVerifyingScreenshot) ? (
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-emerald-50 via-white to-teal-50 border-2 border-[#087A42]/40 shadow-xs text-center space-y-3 animate-in fade-in">
+                  <div className="flex items-center justify-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-[#087A42] text-white flex items-center justify-center shadow-xs animate-pulse">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-xs font-bold text-[#087A42]">
+                        {isCompressingProof ? 'Preparing Image...' : 'AI Vision Verifying Screenshot Live...'}
+                      </p>
+                      <p className="text-[10px] text-[#5E695E]">
+                        Checking payment app, amount (₹{upiModalData.amountToPay}), success status &amp; date/time
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="w-full bg-emerald-100 rounded-full h-1.5 overflow-hidden">
+                    <div className="bg-[#087A42] h-full rounded-full animate-indeterminate" style={{ width: '70%' }} />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5 text-[10px] text-left text-[#5E695E] pt-1">
+                    <span className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#087A42] animate-ping" />
+                      <span>Authentic UPI Receipt</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#087A42]" />
+                      <span>Amount Match (₹{upiModalData.amountToPay})</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#087A42]" />
+                      <span>Payment Date &amp; Time</span>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#087A42]" />
+                      <span>Transaction UTR Ref</span>
+                    </span>
+                  </div>
+                </div>
+              ) : paymentProofUrl && verifiedPaymentInfo && verifiedPaymentInfo.isValid ? (
+                /* Screenshot Verified Card: Genuine payment proof confirmed live! */
+                <div className="p-3.5 bg-gradient-to-br from-emerald-50/90 via-white to-emerald-50/40 border-2 border-[#087A42] rounded-2xl space-y-2.5 shadow-xs animate-in zoom-in-95">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-[#087A42] text-white flex items-center justify-center shadow-xs">
+                        <CheckCircle2 className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-[#087A42]">Payment Screenshot Verified Live</span>
+                          <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-[#087A42] text-white">
+                            PASSED
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-[#5E695E]">
+                          {verifiedPaymentInfo.appName || 'UPI App'} · {screenshotFileName || 'receipt.jpg'} ({screenshotFileSize})
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewScreenshotModal(true)}
+                        className="p-1.5 text-slate-600 hover:text-[#087A42] hover:bg-white rounded-lg transition-colors cursor-pointer border border-slate-200 shadow-2xs"
+                        title="View screenshot preview"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="p-1.5 text-slate-600 hover:text-[#087A42] hover:bg-white rounded-lg transition-colors cursor-pointer border border-slate-200 shadow-2xs"
+                        title="Replace screenshot"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRemoveScreenshot}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                        title="Remove"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Extracted & Verified Payment Details Grid */}
+                  <div className="grid grid-cols-2 gap-2 p-2.5 bg-white rounded-xl border border-emerald-200 text-[11px]">
+                    <div>
+                      <span className="text-[9px] text-[#5E695E] uppercase font-bold block">Verified Amount</span>
+                      <span className="font-black text-[#087A42] text-xs">
+                        ₹{verifiedPaymentInfo.detectedAmount || upiModalData.amountToPay} ✓
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[9px] text-[#5E695E] uppercase font-bold block">App / Gateway</span>
+                      <span className="font-bold text-[#202720] text-xs truncate block">
+                        {verifiedPaymentInfo.appName || 'UPI'}
+                      </span>
+                    </div>
+
+                    <div className="col-span-2 pt-1 border-t border-slate-100 flex items-center justify-between">
+                      <div>
+                        <span className="text-[9px] text-[#5E695E] uppercase font-bold block">Payment Date &amp; Time</span>
+                        <span className="font-semibold text-[#202720] flex items-center gap-1">
+                          <Clock className="w-3 h-3 text-[#087A42]" />
+                          <span>{verifiedPaymentInfo.detectedDateTime || 'Live Timestamp Verified'}</span>
+                        </span>
+                      </div>
+
+                      {verifiedPaymentInfo.detectedUtr && verifiedPaymentInfo.detectedUtr !== 'N/A' && (
+                        <div className="text-right">
+                          <span className="text-[9px] text-[#5E695E] uppercase font-bold block">Ref / UTR</span>
+                          <span className="font-mono font-bold text-[#202720] text-[10px]">
+                            {verifiedPaymentInfo.detectedUtr}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                /* Upload Zone when NO verified screenshot */
                 <div
                   onDragOver={(e) => {
                     e.preventDefault();
@@ -1084,20 +1273,14 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 >
                   <div className="flex flex-col items-center justify-center gap-2">
                     <div className="w-11 h-11 rounded-2xl bg-[#E8F5EE] text-[#087A42] flex items-center justify-center shadow-xs">
-                      {isCompressingProof ? (
-                        <div className="w-5 h-5 border-2 border-[#087A42] border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <Upload className="w-5 h-5" />
-                      )}
+                      <Upload className="w-5 h-5" />
                     </div>
                     <div>
                       <p className="text-xs font-bold text-[#202720]">
-                        {isCompressingProof
-                          ? 'Optimizing Screenshot Image...'
-                          : 'Tap to Upload Payment Screenshot'}
+                        Tap to Upload Payment Screenshot
                       </p>
                       <p className="text-[11px] text-[#5E695E] mt-0.5">
-                        Take a screenshot in GPay or PhonePe showing <strong>Payment Date &amp; Time</strong> and attach it here.
+                        Upload receipt screenshot showing <strong>Payment Date &amp; Time</strong> and amount (₹{upiModalData.amountToPay}).
                       </p>
                     </div>
                     <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#087A42] bg-white px-2.5 py-1 rounded-lg border border-[#E5E8E3] shadow-2xs">
@@ -1106,76 +1289,25 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                     </span>
                   </div>
                 </div>
-              ) : (
-                /* Screenshot Preview Card when attached */
-                <div className="p-3 bg-white border-2 border-[#087A42] rounded-2xl flex items-center justify-between gap-3 shadow-xs animate-in fade-in">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      onClick={() => setPreviewScreenshotModal(true)}
-                      className="w-14 h-14 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0 cursor-pointer hover:opacity-90 transition-opacity relative group"
-                      title="Click to view full preview"
-                    >
-                      <img
-                        src={paymentProofUrl}
-                        alt="Payment Proof"
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
-                        <Eye className="w-4 h-4" />
-                      </div>
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-[#087A42] shrink-0" />
-                        <span className="text-xs font-bold text-[#087A42]">Screenshot Attached</span>
-                      </div>
-                      <p className="text-[11px] font-medium text-[#202720] truncate mt-0.5">
-                        {screenshotFileName || 'payment_receipt.jpg'}
-                      </p>
-                      <p className="text-[10px] text-[#5E695E] flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-[#087A42]" />
-                        <span>Ready for Date &amp; Time verification</span>
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setPreviewScreenshotModal(true)}
-                      className="p-1.5 text-slate-500 hover:text-[#087A42] hover:bg-[#E8F5EE] rounded-lg transition-colors cursor-pointer"
-                      title="Preview screenshot"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="p-1.5 text-slate-500 hover:text-[#087A42] hover:bg-[#E8F5EE] rounded-lg transition-colors cursor-pointer"
-                      title="Replace with different screenshot"
-                    >
-                      <RefreshCw className="w-4 h-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleRemoveScreenshot}
-                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                      title="Remove screenshot"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
               )}
 
-              {/* Warning or Error Message */}
+              {/* Strict Rejection Notice if Uploaded File is Fake or Non-Payment */}
               {(screenshotError || showScreenshotWarning) && (
-                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2 animate-in fade-in">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <span className="text-[11px] font-medium">
-                    {screenshotError || 'Payment screenshot is required to confirm your order. Please upload payment proof.'}
-                  </span>
+                <div className="p-3 bg-rose-50 border-2 border-rose-300 rounded-2xl text-xs text-rose-800 space-y-1.5 animate-in shake">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span className="font-bold text-rose-900">Payment Screenshot Rejected</span>
+                  </div>
+                  <p className="text-[11px] text-rose-700 leading-snug">
+                    {screenshotError || 'Payment screenshot is required to confirm your order. Only authentic successful payment receipts showing date & time are accepted.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="mt-1 text-[11px] font-bold text-rose-800 underline hover:text-rose-900 cursor-pointer block"
+                  >
+                    Tap to upload authentic payment screenshot →
+                  </button>
                 </div>
               )}
             </div>
@@ -1188,10 +1320,10 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               </div>
             )}
 
-            {/* STEP 3: Confirm Order Action (Gated strictly on Screenshot) */}
+            {/* STEP 3: Confirm Order Action (Strictly Gated on Live Verified Screenshot) */}
             <div className="pt-2 space-y-2.5 border-t border-[#E5E8E3]">
-              {paymentProofUrl ? (
-                /* Unlocked: Ready to Confirm Order */
+              {paymentProofUrl && verifiedPaymentInfo && verifiedPaymentInfo.isValid ? (
+                /* Unlocked: Ready to Confirm Order because receipt is verified */
                 <div className="space-y-1.5">
                   <button
                     type="button"
@@ -1202,7 +1334,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                     {isProcessing ? (
                       <div className="flex items-center gap-2">
                         <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>{verificationStatus || 'Confirming Order...'}</span>
+                        <span>{verificationStatus || 'Placing Order...'}</span>
                       </div>
                     ) : (
                       <>
@@ -1213,27 +1345,27 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                     )}
                   </button>
                   <p className="text-[11px] text-center text-[#087A42] font-semibold flex items-center justify-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>Your order is placed once payment screenshot and date/time are verified.</span>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Payment screenshot &amp; date/time verified live! Tap above to confirm order.</span>
                   </p>
                 </div>
               ) : (
-                /* Locked: Prompt to upload screenshot first */
+                /* Locked: Prompt to upload and verify screenshot first */
                 <div className="space-y-1.5">
                   <button
                     type="button"
                     onClick={() => {
                       setShowScreenshotWarning(true);
-                      setScreenshotError('Please upload your payment screenshot above showing payment date & time to confirm your order.');
+                      setScreenshotError('Please upload an authentic payment receipt screenshot showing date & time to confirm your order.');
                       fileInputRef.current?.click();
                     }}
                     className="w-full py-4 bg-[#F7F8F6] hover:bg-[#E8F5EE] border-2 border-dashed border-[#087A42]/50 text-[#087A42] text-xs sm:text-sm font-bold rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-[0.99]"
                   >
                     <Upload className="w-4 h-4 text-[#087A42]" />
-                    <span>Upload Screenshot with Date &amp; Time to Place Order</span>
+                    <span>Upload &amp; Verify Screenshot to Place Order</span>
                   </button>
                   <p className="text-[10px] text-center text-[#5E695E]">
-                    Order will be placed after verifying your payment screenshot and payment date &amp; time.
+                    Order confirmation is strictly locked until a genuine payment screenshot with live date &amp; time is verified. Fake images will not be accepted.
                   </p>
                 </div>
               )}
