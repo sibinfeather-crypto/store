@@ -127,9 +127,6 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     if (!form.phone.trim() || !/^[6-9]\d{9}$/.test(form.phone.replace(/[^0-9]/g, '').slice(-10))) {
       return 'Please enter a valid 10-digit Indian mobile number.';
     }
-    if (!form.email.trim() || !/^\S+@\S+\.\S+$/.test(form.email)) {
-      return 'Please enter a valid email address.';
-    }
     if (!form.addressLine.trim() || form.addressLine.length < 5) {
       return 'Please enter your complete street / house address.';
     }
@@ -454,10 +451,15 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         ? verifiedPaymentInfo.detectedUtr
         : undefined;
 
+      const customerPayload: ShippingAddress = {
+        ...form,
+        email: form.email?.trim() || `${form.phone || 'customer'}@fankostore.in`,
+      };
+
       let result: { success: boolean; order: Order };
       if (upiModalData.paymentType === 'cod') {
         result = await api.createCodOrder({
-          customer: form,
+          customer: customerPayload,
           items: payloadItems,
           couponCode: couponCode || undefined,
           upiApp: targetApp,
@@ -466,7 +468,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         });
       } else {
         result = await api.createUpiOrder({
-          customer: form,
+          customer: customerPayload,
           items: payloadItems,
           couponCode: couponCode || undefined,
           upiApp: targetApp,
@@ -522,26 +524,27 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-start">
         
         {/* Left Column: Delivery Address & Payment Method */}
-        <form onSubmit={handleInitiateOrder} className="lg:col-span-7 space-y-6">
+        <form onSubmit={handleInitiateOrder} className="lg:col-span-7 space-y-4 sm:space-y-6">
           
-          {/* Step 1: Delivery Address */}
-          <div className="bg-white rounded-3xl border border-[#E5E8E3] p-6 sm:p-8 space-y-5 shadow-xs">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E5E8E3]">
-              <h2 className="text-base font-bold text-[#202720] flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-[#087A42] text-white text-xs flex items-center justify-center font-bold">
+          {/* Step 1: Delivery Address (Mobile-Friendly & Compact) */}
+          <div className="bg-white rounded-2xl sm:rounded-3xl border border-[#E5E8E3] p-3.5 sm:p-6 space-y-3.5 shadow-xs">
+            <div className="flex items-center justify-between pb-2.5 border-b border-[#E5E8E3]">
+              <h2 className="text-xs sm:text-sm font-bold text-[#202720] flex items-center gap-1.5 sm:gap-2">
+                <span className="w-5 h-5 rounded-full bg-[#087A42] text-white text-[10px] sm:text-xs flex items-center justify-center font-bold">
                   1
                 </span>
                 <span>Delivery Address (India)</span>
               </h2>
-              <span className="text-xs text-[#087A42] font-semibold flex items-center gap-1">
+              <span className="text-[11px] text-[#087A42] font-semibold flex items-center gap-1">
                 <Truck className="w-3.5 h-3.5" />
-                <span>Pan-India Shipping</span>
+                <span>Pan-India Delivery</span>
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="sm:col-span-2">
-                <label className="text-xs font-bold text-[#202720] block mb-1">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
+              {/* Full Name */}
+              <div className="col-span-2 sm:col-span-1">
+                <label className="text-[11px] sm:text-xs font-semibold text-[#202720] block mb-1">
                   Full Name *
                 </label>
                 <input
@@ -551,16 +554,19 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                   placeholder="e.g. Rahul Sharma"
                   value={form.fullName}
                   onChange={(e) => setForm({ ...form, fullName: e.target.value })}
-                  className="w-full text-base sm:text-xs px-3.5 py-3 sm:py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
+                  className="w-full text-xs px-3 py-2 sm:py-2.5 bg-[#F7F8F6] border border-[#DCE1DB] rounded-lg sm:rounded-xl focus:bg-white focus:border-[#087A42] focus:ring-1 focus:ring-[#087A42]/20 focus:outline-none transition-all placeholder:text-slate-400"
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-[#202720] block mb-1">
+              {/* Mobile Number */}
+              <div className="col-span-2 sm:col-span-1">
+                <label className="text-[11px] sm:text-xs font-semibold text-[#202720] block mb-1">
                   Mobile Number (for Courier updates) *
                 </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-3.5 sm:top-2.5 text-xs text-[#5E695E] font-medium">+91</span>
+                <div className="relative flex items-center">
+                  <span className="absolute left-2.5 text-xs text-[#5E695E] font-bold select-none pointer-events-none">
+                    +91
+                  </span>
                   <input
                     type="tel"
                     required
@@ -570,28 +576,14 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                     maxLength={10}
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })}
-                    className="w-full text-base sm:text-xs pl-11 pr-3.5 py-3 sm:py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none font-mono"
+                    className="w-full text-xs pl-10 pr-3 py-2 sm:py-2.5 bg-[#F7F8F6] border border-[#DCE1DB] rounded-lg sm:rounded-xl focus:bg-white focus:border-[#087A42] focus:ring-1 focus:ring-[#087A42]/20 focus:outline-none font-mono tracking-wide transition-all placeholder:text-slate-400"
                   />
                 </div>
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-[#202720] block mb-1">
-                  Email Address (for Receipt) *
-                </label>
-                <input
-                  type="email"
-                  required
-                  autoComplete="email"
-                  placeholder="rahul@example.com"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full text-base sm:text-xs px-3.5 py-3 sm:py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="text-xs font-bold text-[#202720] block mb-1">
+              {/* Street Address */}
+              <div className="col-span-2">
+                <label className="text-[11px] sm:text-xs font-semibold text-[#202720] block mb-1">
                   Street Address / House / Flat No. *
                 </label>
                 <input
@@ -601,25 +593,13 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                   placeholder="e.g. Flat 402, Sunshine Apartments, Main Road"
                   value={form.addressLine}
                   onChange={(e) => setForm({ ...form, addressLine: e.target.value })}
-                  className="w-full text-base sm:text-xs px-3.5 py-3 sm:py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
+                  className="w-full text-xs px-3 py-2 sm:py-2.5 bg-[#F7F8F6] border border-[#DCE1DB] rounded-lg sm:rounded-xl focus:bg-white focus:border-[#087A42] focus:ring-1 focus:ring-[#087A42]/20 focus:outline-none transition-all placeholder:text-slate-400"
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-[#202720] block mb-1">
-                  Landmark (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Near City Hospital or Metro Pillar 12"
-                  value={form.landmark}
-                  onChange={(e) => setForm({ ...form, landmark: e.target.value })}
-                  className="w-full text-base sm:text-xs px-3.5 py-3 sm:py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-[#202720] block mb-1">
+              {/* PIN Code (Side by side on mobile) */}
+              <div className="col-span-1">
+                <label className="text-[11px] sm:text-xs font-semibold text-[#202720] block mb-1">
                   PIN Code *
                 </label>
                 <input
@@ -631,12 +611,13 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                   placeholder="e.g. 400001"
                   value={form.pincode}
                   onChange={(e) => handlePincodeAutoFill(e.target.value.replace(/\D/g, ''))}
-                  className="w-full text-base sm:text-xs px-3.5 py-3 sm:py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none font-mono"
+                  className="w-full text-xs px-3 py-2 sm:py-2.5 bg-[#F7F8F6] border border-[#DCE1DB] rounded-lg sm:rounded-xl focus:bg-white focus:border-[#087A42] focus:ring-1 focus:ring-[#087A42]/20 focus:outline-none font-mono tracking-wide transition-all placeholder:text-slate-400"
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-[#202720] block mb-1">
+              {/* City (Side by side on mobile) */}
+              <div className="col-span-1">
+                <label className="text-[11px] sm:text-xs font-semibold text-[#202720] block mb-1">
                   City *
                 </label>
                 <input
@@ -645,18 +626,19 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                   placeholder="e.g. Mumbai"
                   value={form.city}
                   onChange={(e) => setForm({ ...form, city: e.target.value })}
-                  className="w-full text-base sm:text-xs px-3.5 py-3 sm:py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
+                  className="w-full text-xs px-3 py-2 sm:py-2.5 bg-[#F7F8F6] border border-[#DCE1DB] rounded-lg sm:rounded-xl focus:bg-white focus:border-[#087A42] focus:ring-1 focus:ring-[#087A42]/20 focus:outline-none transition-all placeholder:text-slate-400"
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-[#202720] block mb-1">
+              {/* State */}
+              <div className="col-span-2">
+                <label className="text-[11px] sm:text-xs font-semibold text-[#202720] block mb-1">
                   State *
                 </label>
                 <select
                   value={form.state}
                   onChange={(e) => setForm({ ...form, state: e.target.value })}
-                  className="w-full text-base sm:text-xs px-3.5 py-3 sm:py-2.5 bg-[#F7F8F6] border border-[#E5E8E3] rounded-xl focus:bg-white focus:border-[#087A42] focus:outline-none"
+                  className="w-full text-xs px-3 py-2 sm:py-2.5 bg-[#F7F8F6] border border-[#DCE1DB] rounded-lg sm:rounded-xl focus:bg-white focus:border-[#087A42] focus:ring-1 focus:ring-[#087A42]/20 focus:outline-none transition-all cursor-pointer"
                 >
                   {indianStates.map((st) => (
                     <option key={st} value={st}>
@@ -667,7 +649,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               </div>
             </div>
 
-            <label className="flex items-center gap-2 pt-2 text-xs text-[#5E695E] cursor-pointer">
+            <label className="flex items-center gap-2 pt-1 text-[11px] text-[#5E695E] cursor-pointer">
               <input
                 type="checkbox"
                 checked={saveInfo}
@@ -678,99 +660,97 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
             </label>
           </div>
 
-          {/* Step 2: Payment Method */}
-          <div className="bg-white rounded-3xl border border-[#E5E8E3] p-6 sm:p-8 space-y-4 shadow-xs">
-            <div className="flex items-center justify-between pb-3 border-b border-[#E5E8E3]">
-              <h2 className="text-base font-bold text-[#202720] flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-[#087A42] text-white text-xs flex items-center justify-center font-bold">
+          {/* Step 2: Payment Method (Sleek & Mobile-Optimized) */}
+          <div className="bg-white rounded-2xl sm:rounded-3xl border border-[#E5E8E3] p-3.5 sm:p-6 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between pb-2.5 border-b border-[#E5E8E3]">
+              <h2 className="text-xs sm:text-sm font-bold text-[#202720] flex items-center gap-1.5 sm:gap-2">
+                <span className="w-5 h-5 rounded-full bg-[#087A42] text-white text-[10px] sm:text-xs flex items-center justify-center font-bold">
                   2
                 </span>
                 <span>Select Payment Method</span>
               </h2>
-              <span className="text-[11px] text-[#087A42] font-semibold flex items-center gap-1">
+              <span className="text-[10px] sm:text-[11px] text-[#087A42] font-semibold flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
                 <span>Zero Gateway Fees</span>
               </span>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               {/* Option 1: Cash on Delivery with ₹99 Advance */}
               {codAllowed && (
                 <label
-                  className={`p-4 rounded-2xl border-2 cursor-pointer flex items-start gap-3.5 transition-all ${
+                  className={`p-2.5 sm:p-3 rounded-xl border-1.5 cursor-pointer flex items-center justify-between gap-2 transition-all ${
                     paymentMethod === 'cod'
-                      ? 'border-[#087A42] bg-[#E8F5EE]/40'
-                      : 'border-[#E5E8E3] hover:border-slate-300'
+                      ? 'border-[#087A42] bg-[#E8F5EE]/60 ring-1 ring-[#087A42]/30 shadow-2xs'
+                      : 'border-[#E5E8E3] hover:border-slate-300 bg-white'
                   }`}
                 >
-                  <input
-                    type="radio"
-                    name="payment"
-                    checked={paymentMethod === 'cod'}
-                    onChange={() => setPaymentMethod('cod')}
-                    className="mt-1 text-[#087A42] focus:ring-[#087A42]"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded bg-[#FF7900] text-white flex items-center justify-center font-bold text-[10px]">
-                          COD
-                        </span>
-                        <p className="text-xs font-bold text-[#202720]">
-                          Cash on Delivery (₹{currentAdvance} Advance Token)
-                        </p>
-                      </div>
-                      <span className="text-[11px] font-bold text-[#FF7900] bg-orange-50 px-2 py-0.5 rounded border border-orange-200">
-                        Pay ₹{currentAdvance} Now
-                      </span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <input
+                      type="radio"
+                      name="payment"
+                      checked={paymentMethod === 'cod'}
+                      onChange={() => setPaymentMethod('cod')}
+                      className="w-3.5 h-3.5 text-[#087A42] focus:ring-[#087A42] cursor-pointer shrink-0"
+                    />
+                    <span className="w-5 h-5 rounded bg-[#FF7900] text-white flex items-center justify-center font-black text-[8.5px] shrink-0">
+                      COD
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-[#202720] leading-tight">
+                        Cash on Delivery
+                      </p>
+                      <p className="text-[10px] text-[#5E695E] leading-tight mt-0.5 truncate">
+                        Pay ₹{currentAdvance} advance · ₹{currentBalance} on delivery
+                      </p>
                     </div>
-                    <p className="text-[11px] text-[#5E695E] mt-1.5 leading-relaxed">
-                      Pay small advance ₹{currentAdvance} token via UPI or QR Code to verify your order. The remaining balance of <strong className="text-[#202720]">₹{currentBalance}</strong> is collected in cash or UPI at your doorstep upon delivery.
-                    </p>
                   </div>
+
+                  <span className="text-[10px] font-bold text-[#FF7900] bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200 shrink-0">
+                    ₹{currentAdvance} Now
+                  </span>
                 </label>
               )}
 
               {/* Option 2: 100% Full UPI Payment */}
               {upiAllowed && (
                 <label
-                  className={`p-4 rounded-2xl border-2 cursor-pointer flex items-start gap-3.5 transition-all ${
+                  className={`p-2.5 sm:p-3 rounded-xl border-1.5 cursor-pointer flex items-center justify-between gap-2 transition-all ${
                     paymentMethod === 'upi'
-                      ? 'border-[#087A42] bg-[#E8F5EE]/40'
-                      : 'border-[#E5E8E3] hover:border-slate-300'
+                      ? 'border-[#087A42] bg-[#E8F5EE]/60 ring-1 ring-[#087A42]/30 shadow-2xs'
+                      : 'border-[#E5E8E3] hover:border-slate-300 bg-white'
                   }`}
                 >
-                  <input
-                    type="radio"
-                    name="payment"
-                    checked={paymentMethod === 'upi'}
-                    onChange={() => setPaymentMethod('upi')}
-                    className="mt-1 text-[#087A42] focus:ring-[#087A42]"
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="w-6 h-6 rounded bg-[#087A42] text-white flex items-center justify-center font-bold text-[10px]">
-                          UPI
-                        </span>
-                        <p className="text-xs font-bold text-[#202720]">
-                          Full UPI Payment (GPay, PhonePe, Paytm, QR)
-                        </p>
-                      </div>
-                      <span className="text-[11px] font-semibold text-[#087A42] bg-emerald-50 px-2 py-0.5 rounded border border-[#087A42]/30">
-                        Fastest Dispatch
-                      </span>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <input
+                      type="radio"
+                      name="payment"
+                      checked={paymentMethod === 'upi'}
+                      onChange={() => setPaymentMethod('upi')}
+                      className="w-3.5 h-3.5 text-[#087A42] focus:ring-[#087A42] cursor-pointer shrink-0"
+                    />
+                    <span className="w-5 h-5 rounded bg-[#087A42] text-white flex items-center justify-center font-black text-[8.5px] shrink-0">
+                      UPI
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-[#202720] leading-tight">
+                        Full UPI Payment
+                      </p>
+                      <p className="text-[10px] text-[#5E695E] leading-tight mt-0.5 truncate">
+                        GPay, PhonePe, Paytm, QR · Instant
+                      </p>
                     </div>
-                    <p className="text-[11px] text-[#5E695E] mt-1.5 leading-relaxed">
-                      Pay 100% full amount (₹{total}) instantly via Google Pay, PhonePe, Paytm, or UPI QR code. No cash hassle at delivery.
-                    </p>
                   </div>
+
+                  <span className="text-[10px] font-bold text-[#087A42] bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 shrink-0">
+                    Pay ₹{total}
+                  </span>
                 </label>
               )}
             </div>
 
             {error && (
-              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2">
+              <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                 <span>{error}</span>
               </div>
@@ -779,7 +759,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
             <button
               type="submit"
               disabled={isProcessing}
-              className="w-full py-4 bg-[#087A42] hover:bg-[#066336] text-white text-sm font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+              className="w-full py-3 sm:py-3.5 bg-[#087A42] hover:bg-[#066336] text-white text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.99] disabled:opacity-50 cursor-pointer"
             >
               <Smartphone className="w-4 h-4 text-emerald-200" />
               <span>
@@ -796,8 +776,8 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         </form>
 
         {/* Right Column: Order Summary */}
-        <div className="lg:col-span-5 bg-white rounded-3xl border border-[#E5E8E3] p-6 sm:p-8 space-y-6 shadow-xs lg:sticky lg:top-24">
-          <h3 className="text-base font-bold text-[#202720] pb-3 border-b border-[#E5E8E3]">
+        <div className="lg:col-span-5 bg-white rounded-2xl sm:rounded-3xl border border-[#E5E8E3] p-4 sm:p-6 space-y-4 shadow-xs lg:sticky lg:top-24">
+          <h3 className="text-sm sm:text-base font-bold text-[#202720] pb-2.5 border-b border-[#E5E8E3]">
             Order Summary ({items.length} items)
           </h3>
 

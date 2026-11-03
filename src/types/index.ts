@@ -66,7 +66,7 @@ export interface CartItem {
 export interface ShippingAddress {
   fullName: string;
   phone: string;
-  email: string;
+  email?: string;
   addressLine: string;
   landmark?: string;
   city: string;

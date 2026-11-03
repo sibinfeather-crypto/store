@@ -871,7 +871,7 @@ app.get('/api/orders/track/lookup', (req, res) => {
   }
 
   if (contact) {
-    const matchesEmail = order.customer.email.toLowerCase() === contact;
+    const matchesEmail = Boolean(order.customer.email && order.customer.email.toLowerCase() === contact);
     const matchesPhone = order.customer.phone.replace(/[^0-9]/g, '').endsWith(contact.replace(/[^0-9]/g, '').slice(-10));
     if (!matchesEmail && !matchesPhone) {
       return res.status(403).json({ error: 'Contact details (email or phone) do not match the order records.' });
@@ -967,7 +967,7 @@ app.get('/api/admin/orders/export-csv', requireAdmin, (_req, res) => {
     new Date(o.createdAt).toLocaleDateString('en-IN'),
     `"${o.customer.fullName.replace(/"/g, '""')}"`,
     o.customer.phone,
-    o.customer.email,
+    o.customer.email || '',
     `"${o.customer.city.replace(/"/g, '""')}"`,
     `"${o.customer.state.replace(/"/g, '""')}"`,
     o.customer.pincode,

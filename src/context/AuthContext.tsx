@@ -82,7 +82,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return {
           id: `cust-${Date.now()}`,
           name: address.fullName,
-          email: address.email,
+          email: address.email || '',
           phone: address.phone,
           savedAddresses: [address],
         };
