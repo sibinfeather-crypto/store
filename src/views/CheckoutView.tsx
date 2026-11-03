@@ -23,6 +23,10 @@ import {
   Eye,
   Trash2,
   RefreshCw,
+  Download,
+  Sparkles,
+  Lightbulb,
+  Clock,
 } from 'lucide-react';
 import { useCart } from '../context/CartContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
@@ -313,6 +317,12 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   // Open the chosen UPI app (GPay / PhonePe / Paytm / Universal UPI) on buyer's phone
   const handleLaunchUpiApp = (app: 'gpay' | 'phonepe' | 'paytm' | 'other') => {
     setSelectedApp(app);
+    // Auto-copy UPI ID so buyer has it in clipboard if Google Pay restricts browser deep links
+    if (upiModalData?.upiId) {
+      navigator.clipboard.writeText(upiModalData.upiId).catch(() => {});
+      setCopiedUpi(true);
+      setTimeout(() => setCopiedUpi(false), 3500);
+    }
     handleOpenUpiApp(app);
   };
 
@@ -321,6 +331,13 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     const targetApp = appOverride || selectedApp || 'other';
     setSelectedApp(targetApp);
     setAppOpened(true);
+
+    // Auto-copy UPI ID to clipboard
+    if (upiModalData.upiId) {
+      navigator.clipboard.writeText(upiModalData.upiId).catch(() => {});
+      setCopiedUpi(true);
+      setTimeout(() => setCopiedUpi(false), 3500);
+    }
 
     let targetUri = upiModalData.upiUri;
     if (targetApp === 'gpay') targetUri = upiModalData.gpayUri;
@@ -336,6 +353,17 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         window.location.href = upiModalData.upiUri;
       }
     }, 1200);
+  };
+
+  const handleDownloadQr = () => {
+    if (!upiModalData?.qrCodeUrl) return;
+    const link = document.createElement('a');
+    link.href = upiModalData.qrCodeUrl;
+    link.target = '_blank';
+    link.download = `UPI-QR-${upiModalData.orderNumber || 'payment'}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Order Confirmation: ONLY allowed when buyer has uploaded their payment screenshot!
@@ -869,122 +897,146 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               }}
             />
 
-            {/* STEP 1: Pay via UPI Apps or QR Code */}
-            <div className="space-y-3 pt-1 border-t border-[#E5E8E3]">
+            {/* STEP 1: Pay via Centered Big QR Code or UPI ID */}
+            <div className="space-y-4 pt-1 border-t border-[#E5E8E3]">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-[#087A42] uppercase tracking-wider flex items-center gap-1.5">
                   <span className="w-4 h-4 rounded-full bg-[#087A42] text-white text-[10px] flex items-center justify-center font-bold">1</span>
-                  <span>Step 1: Open UPI App to Pay</span>
+                  <span>Step 1: Scan QR or Pay ₹{upiModalData.amountToPay}</span>
                 </span>
-                <span className="text-[10px] text-[#5E695E]">Any UPI App</span>
+                <span className="text-[10px] font-bold text-[#087A42] bg-[#E8F5EE] px-2.5 py-0.5 rounded-full border border-emerald-200">
+                  Instant Verification
+                </span>
               </div>
 
-              {/* Direct App Launchers */}
-              <div className="grid grid-cols-3 gap-2">
-                {/* Google Pay */}
-                <button
-                  type="button"
-                  onClick={() => handleLaunchUpiApp('gpay')}
-                  className={`p-2.5 bg-white hover:bg-slate-50 border-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95 ${
-                    selectedApp === 'gpay' ? 'border-[#087A42] bg-[#E8F5EE]/30' : 'border-slate-200'
-                  }`}
-                >
-                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-black text-xs text-blue-600">
-                    G
-                  </div>
-                  <span className="text-[11px] font-bold text-[#202720]">GPay</span>
-                </button>
-
-                {/* PhonePe */}
-                <button
-                  type="button"
-                  onClick={() => handleLaunchUpiApp('phonepe')}
-                  className={`p-2.5 bg-white hover:bg-slate-50 border-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95 ${
-                    selectedApp === 'phonepe' ? 'border-[#5f259f] bg-[#5f259f]/10' : 'border-slate-200'
-                  }`}
-                >
-                  <div className="w-8 h-8 rounded-full bg-[#5f259f]/10 flex items-center justify-center font-black text-xs text-[#5f259f]">
-                    Pe
-                  </div>
-                  <span className="text-[11px] font-bold text-[#202720]">PhonePe</span>
-                </button>
-
-                {/* Paytm */}
-                <button
-                  type="button"
-                  onClick={() => handleLaunchUpiApp('paytm')}
-                  className={`p-2.5 bg-white hover:bg-slate-50 border-2 rounded-xl flex flex-col items-center justify-center gap-1 transition-all cursor-pointer shadow-xs active:scale-95 ${
-                    selectedApp === 'paytm' ? 'border-[#00baf2] bg-[#00baf2]/10' : 'border-slate-200'
-                  }`}
-                >
-                  <div className="w-8 h-8 rounded-full bg-[#00baf2]/10 flex items-center justify-center font-black text-xs text-[#002970]">
-                    P
-                  </div>
-                  <span className="text-[11px] font-bold text-[#202720]">Paytm</span>
-                </button>
-              </div>
-
-              {/* Pay Now Button (Direct Launch) */}
-              <button
-                type="button"
-                onClick={() => handleOpenUpiApp(selectedApp || 'other')}
-                className="w-full py-3 bg-[#087A42] hover:bg-[#066336] text-white text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2 shadow-xs transition-all active:scale-[0.98] cursor-pointer"
-              >
-                <Smartphone className="w-4 h-4 text-emerald-200" />
-                <span>Pay Now · ₹{upiModalData.amountToPay} via {selectedApp === 'gpay' ? 'GPay' : selectedApp === 'phonepe' ? 'PhonePe' : selectedApp === 'paytm' ? 'Paytm' : 'UPI'}</span>
-                <ChevronRight className="w-4 h-4 text-emerald-200" />
-              </button>
-
-              {/* App opened feedback */}
-              {appOpened && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-start gap-2 animate-in fade-in">
-                  <CheckCircle2 className="w-4 h-4 text-[#087A42] shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold">UPI App Launched!</span>
-                    <p className="text-[11px] text-emerald-700 mt-0.5">
-                      Once payment is completed, take a screenshot of the receipt and upload it in <strong>Step 2</strong> below to confirm your order.
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* QR Code Section (Scan with any app or on desktop) */}
-              <div className="p-3 bg-[#F7F8F6] border border-[#E5E8E3] rounded-2xl flex items-center gap-3.5">
-                <div className="w-20 h-20 bg-white p-1 rounded-xl border border-slate-200 flex items-center justify-center shrink-0">
-                  <img
-                    src={upiModalData.qrCodeUrl}
-                    alt="UPI QR Code"
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-
-                <div className="space-y-1 flex-1 min-w-0">
-                  <p className="text-xs font-bold text-[#202720] flex items-center gap-1">
+              {/* BIG CENTERED QR CODE CARD */}
+              <div className="p-5 sm:p-6 bg-gradient-to-b from-[#F7F8F6] via-white to-emerald-50/40 border-2 border-emerald-400/60 rounded-3xl space-y-4 shadow-sm text-center">
+                
+                {/* Header */}
+                <div className="space-y-1">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E8F5EE] text-[#087A42] text-xs font-bold border border-emerald-200 shadow-2xs">
                     <QrCode className="w-3.5 h-3.5 text-[#087A42]" />
-                    <span>Or Scan QR Code</span>
+                    <span>Scan with GPay, PhonePe, or Paytm</span>
+                  </span>
+                  <h3 className="text-base sm:text-lg font-black text-[#202720]">
+                    Pay Exactly <span className="text-[#087A42]">₹{upiModalData.amountToPay}</span>
+                  </h3>
+                  <p className="text-[11px] text-[#5E695E]">
+                    Point your UPI camera at this QR code to pay instantly
                   </p>
-                  <p className="text-[10px] text-[#5E695E]">
-                    Scan using any UPI app camera or copy UPI ID:
-                  </p>
+                </div>
+
+                {/* Big Centered QR Code Box */}
+                <div className="flex justify-center my-2">
+                  <div className="relative p-3.5 sm:p-4 bg-white rounded-3xl border-2 border-[#087A42] shadow-md hover:shadow-lg transition-shadow inline-block">
+                    <div className="w-56 h-56 sm:w-72 sm:h-72 flex items-center justify-center bg-white rounded-2xl overflow-hidden">
+                      <img
+                        src={upiModalData.qrCodeUrl}
+                        alt="UPI QR Code - Scan to Pay"
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#087A42] text-white text-[10px] font-bold px-3 py-0.5 rounded-full shadow-xs uppercase tracking-wider whitespace-nowrap">
+                      ₹{upiModalData.amountToPay} · Scan &amp; Pay
+                    </div>
+                  </div>
+                </div>
+
+                {/* Centered Actions: Download QR & Copy UPI ID */}
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={handleDownloadQr}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-[#087A42] text-xs font-bold rounded-xl border border-emerald-300 shadow-2xs transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Download className="w-4 h-4 text-[#087A42]" />
+                    <span>Download QR Code</span>
+                  </button>
 
                   <button
                     type="button"
                     onClick={handleCopyUpiId}
-                    className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold bg-white hover:bg-slate-50 text-[#202720] px-2.5 py-1 rounded-lg border border-[#E5E8E3] transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#087A42] hover:bg-[#066336] text-white text-xs font-bold rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
                   >
                     {copiedUpi ? (
                       <>
-                        <Check className="w-3 h-3 text-[#087A42]" />
-                        <span className="text-[#087A42]">UPI ID Copied!</span>
+                        <Check className="w-4 h-4" />
+                        <span>UPI ID Copied!</span>
                       </>
                     ) : (
                       <>
-                        <Copy className="w-3 h-3 text-[#5E695E]" />
-                        <span className="truncate">{upiModalData.upiId}</span>
+                        <Copy className="w-4 h-4" />
+                        <span>Copy UPI ID</span>
                       </>
                     )}
                   </button>
                 </div>
+
+                {/* Centered UPI ID Bar */}
+                <div className="inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-white rounded-xl border border-emerald-200 text-xs shadow-2xs max-w-full">
+                  <span className="text-[#5E695E] text-[11px] font-semibold">Store UPI ID:</span>
+                  <span className="font-mono font-bold text-[#202720] truncate select-all">{upiModalData.upiId}</span>
+                </div>
+
+                {/* Clear 4-Step Instructions */}
+                <div className="bg-white p-4 rounded-2xl border border-emerald-200/90 text-left space-y-2.5 shadow-2xs mt-3">
+                  <p className="text-xs font-bold text-[#202720] flex items-center gap-1.5">
+                    <span className="w-4 h-4 rounded-full bg-[#087A42] text-white text-[10px] flex items-center justify-center font-bold">✓</span>
+                    <span>How to Complete Payment:</span>
+                  </p>
+
+                  <div className="space-y-2 text-xs text-[#202720]">
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-[#E8F5EE] text-[#087A42] font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-emerald-200">
+                        1
+                      </span>
+                      <div className="leading-relaxed">
+                        <strong>Scan the big QR code above</strong> with GPay or PhonePe, OR tap <strong>&quot;Copy UPI ID&quot;</strong>.
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-[#E8F5EE] text-[#087A42] font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-emerald-200">
+                        2
+                      </span>
+                      <div className="leading-relaxed">
+                        Pay exactly <strong>₹{upiModalData.amountToPay}</strong> in your Google Pay, PhonePe, or Paytm app.
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-[#E8F5EE] text-[#087A42] font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-emerald-200">
+                        3
+                      </span>
+                      <div className="leading-relaxed">
+                        Take a screenshot of the payment receipt clearly showing the <strong>Payment Date &amp; Time</strong> and <strong>Amount (₹{upiModalData.amountToPay})</strong>.
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-5 h-5 rounded-full bg-[#E8F5EE] text-[#087A42] font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-emerald-200">
+                        4
+                      </span>
+                      <div className="leading-relaxed">
+                        Upload the screenshot in <strong>Step 2</strong> below. Once our team verifies your payment screenshot by matching the <strong>Payment Date &amp; Time</strong>, your order is placed and confirmed!
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Verification Notice */}
+                <div className="text-[11px] text-[#087A42] bg-[#E8F5EE] p-3 rounded-xl border border-emerald-200/90 flex items-start gap-2.5 text-left leading-relaxed">
+                  <Clock className="w-4 h-4 text-[#087A42] shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-[#202720]">
+                      Order Verified by Payment Date &amp; Time:
+                    </p>
+                    <p className="text-[11px] text-[#202720]/80 mt-0.5">
+                      Once uploaded, our team verifies the payment receipt by matching the exact <strong>Payment Date &amp; Time</strong> against bank records for immediate order placement and dispatch.
+                    </p>
+                  </div>
+                </div>
+
               </div>
             </div>
 
@@ -995,8 +1047,9 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                   <span className="w-4 h-4 rounded-full bg-[#087A42] text-white text-[10px] flex items-center justify-center font-bold">2</span>
                   <span>Step 2: Upload Payment Screenshot</span>
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                  Required
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  <span>Must Show Date &amp; Time</span>
                 </span>
               </div>
 
@@ -1039,12 +1092,12 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                           : 'Tap to Upload Payment Screenshot'}
                       </p>
                       <p className="text-[11px] text-[#5E695E] mt-0.5">
-                        Take a screenshot in GPay/PhonePe/Paytm after payment and select it here.
+                        Take a screenshot in GPay or PhonePe showing <strong>Payment Date &amp; Time</strong> and attach it here.
                       </p>
                     </div>
                     <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#087A42] bg-white px-2.5 py-1 rounded-lg border border-[#E5E8E3] shadow-2xs">
                       <ImageIcon className="w-3 h-3" />
-                      <span>Supports PNG, JPG, Camera & Clipboard Paste</span>
+                      <span>Supports PNG, JPG, Camera &amp; Clipboard Paste</span>
                     </span>
                   </div>
                 </div>
@@ -1075,8 +1128,9 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                       <p className="text-[11px] font-medium text-[#202720] truncate mt-0.5">
                         {screenshotFileName || 'payment_receipt.jpg'}
                       </p>
-                      <p className="text-[10px] text-[#5E695E]">
-                        {screenshotFileSize} · Ready for instant confirmation
+                      <p className="text-[10px] text-[#5E695E] flex items-center gap-1">
+                        <Clock className="w-3 h-3 text-[#087A42]" />
+                        <span>Ready for Date &amp; Time verification</span>
                       </p>
                     </div>
                   </div>
@@ -1133,25 +1187,31 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
             <div className="pt-2 space-y-2.5 border-t border-[#E5E8E3]">
               {paymentProofUrl ? (
                 /* Unlocked: Ready to Confirm Order */
-                <button
-                  type="button"
-                  onClick={handleConfirmOrderWithScreenshot}
-                  disabled={isProcessing}
-                  className="w-full py-4 bg-[#087A42] hover:bg-[#066336] text-white text-sm sm:text-base font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
-                >
-                  {isProcessing ? (
-                    <div className="flex items-center gap-2">
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>{verificationStatus || 'Confirming Order...'}</span>
-                    </div>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-5 h-5 text-emerald-200" />
-                      <span>Confirm Order · ₹{upiModalData.amountToPay}</span>
-                      <ChevronRight className="w-4 h-4 text-emerald-200" />
-                    </>
-                  )}
-                </button>
+                <div className="space-y-1.5">
+                  <button
+                    type="button"
+                    onClick={handleConfirmOrderWithScreenshot}
+                    disabled={isProcessing}
+                    className="w-full py-4 bg-[#087A42] hover:bg-[#066336] text-white text-sm sm:text-base font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                  >
+                    {isProcessing ? (
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>{verificationStatus || 'Confirming Order...'}</span>
+                      </div>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="w-5 h-5 text-emerald-200" />
+                        <span>Confirm &amp; Place Order · ₹{upiModalData.amountToPay}</span>
+                        <ChevronRight className="w-4 h-4 text-emerald-200" />
+                      </>
+                    )}
+                  </button>
+                  <p className="text-[11px] text-center text-[#087A42] font-semibold flex items-center justify-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Your order is placed once payment screenshot and date/time are verified.</span>
+                  </p>
+                </div>
               ) : (
                 /* Locked: Prompt to upload screenshot first */
                 <div className="space-y-1.5">
@@ -1159,16 +1219,16 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                     type="button"
                     onClick={() => {
                       setShowScreenshotWarning(true);
-                      setScreenshotError('Please upload your payment screenshot above to confirm your order.');
+                      setScreenshotError('Please upload your payment screenshot above showing payment date & time to confirm your order.');
                       fileInputRef.current?.click();
                     }}
                     className="w-full py-4 bg-[#F7F8F6] hover:bg-[#E8F5EE] border-2 border-dashed border-[#087A42]/50 text-[#087A42] text-xs sm:text-sm font-bold rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-[0.99]"
                   >
                     <Upload className="w-4 h-4 text-[#087A42]" />
-                    <span>Upload Payment Screenshot to Confirm Order</span>
+                    <span>Upload Screenshot with Date &amp; Time to Place Order</span>
                   </button>
                   <p className="text-[10px] text-center text-[#5E695E]">
-                    Order confirmation is unlocked after attaching the payment screenshot.
+                    Order will be placed after verifying your payment screenshot and payment date &amp; time.
                   </p>
                 </div>
               )}

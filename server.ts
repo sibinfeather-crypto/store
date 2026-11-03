@@ -436,10 +436,13 @@ function generateUpiIntentUrls(params: {
 
   return {
     upiUri: `upi://pay?${baseQuery}`,
-    gpayUri: `gpay://upi/pay?${baseQuery}`,
+    // gpay://upi/pay scheme triggers Google Pay's strict merchant validation ("Money has not been debited")
+    // Using Android intent and universal upi:// avoids triggering this restriction
+    gpayUri: `intent://pay?${baseQuery}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`,
+    universalUpiUri: `upi://pay?${baseQuery}`,
     phonepeUri: `phonepe://pay?${baseQuery}`,
     paytmUri: `paytmmp://pay?${baseQuery}`,
-    qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=10&data=${encodeURIComponent(`upi://pay?${baseQuery}`)}`,
+    qrCodeUrl: `https://api.qrserver.com/v1/create-qr-code/?size=500x500&margin=12&data=${encodeURIComponent(`upi://pay?${baseQuery}`)}`,
   };
 }
 

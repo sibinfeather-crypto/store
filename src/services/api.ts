@@ -689,7 +689,7 @@ export const api = {
       const orderNumber = data.orderRef || `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
       // Transaction note (tn) removed so no order reference appears in GPay or UPI apps
       const baseQuery = `pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${data.amount}&cu=INR`;
-      const defaultQr = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=10&data=${encodeURIComponent(`upi://pay?${baseQuery}`)}`;
+      const defaultQr = `https://api.qrserver.com/v1/create-qr-code/?size=500x500&margin=12&data=${encodeURIComponent(`upi://pay?${baseQuery}`)}`;
       const finalQr = settings.upiQrMode === 'custom' && settings.customUpiQrUrl ? settings.customUpiQrUrl : defaultQr;
 
       return {
@@ -699,7 +699,7 @@ export const api = {
         amount: data.amount,
         orderNumber,
         upiUri: `upi://pay?${baseQuery}`,
-        gpayUri: `gpay://upi/pay?${baseQuery}`,
+        gpayUri: `intent://pay?${baseQuery}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end`,
         phonepeUri: `phonepe://pay?${baseQuery}`,
         paytmUri: `paytmmp://pay?${baseQuery}`,
         qrCodeUrl: finalQr,
