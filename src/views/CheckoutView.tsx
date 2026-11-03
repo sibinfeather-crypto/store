@@ -84,6 +84,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   // UPI Payment Modal State
   const [upiModalData, setUpiModalData] = useState<UpiModalData | null>(null);
   const [selectedApp, setSelectedApp] = useState<'gpay' | 'phonepe' | 'paytm' | 'other'>('gpay');
+  const [paymentTab, setPaymentTab] = useState<'qr' | 'upi_id'>('qr');
   const [appOpened, setAppOpened] = useState(false);
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
@@ -818,70 +819,45 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
 
       {/* UPI Intent & QR Code Payment Modal - 2-Step Payment & Verification Flow */}
       {upiModalData && (
-        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-7 space-y-5 shadow-2xl border border-[#E5E8E3] my-6 animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-md w-full p-4 sm:p-6 space-y-3.5 shadow-2xl border border-[#E5E8E3] my-auto max-h-[94vh] overflow-y-auto animate-in zoom-in-95 duration-200">
             
-            {/* Modal Header & Step Indicator */}
-            <div className="flex items-center justify-between pb-3 border-b border-[#E5E8E3]">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-[#087A42] text-white flex items-center justify-center font-black text-xs shadow-xs">
+            {/* Modal Header with Amount Badge */}
+            <div className="flex items-center justify-between pb-2.5 border-b border-[#E5E8E3]">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-8 h-8 rounded-xl bg-[#087A42] text-white flex items-center justify-center font-black text-xs shadow-xs shrink-0">
                   UPI
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-[#202720] flex items-center gap-1.5">
+                <div className="min-w-0">
+                  <h3 className="text-xs sm:text-sm font-bold text-[#202720] flex items-center gap-1 truncate">
                     <span>
                       {upiModalData.paymentType === 'cod'
-                        ? 'Cash on Delivery (₹99 Advance)'
+                        ? 'COD (₹99 Advance Token)'
                         : 'Full UPI Instant Payment'}
                     </span>
-                    <ShieldCheck className="w-4 h-4 text-[#087A42]" />
+                    <ShieldCheck className="w-3.5 h-3.5 text-[#087A42] shrink-0" />
                   </h3>
-                  <p className="text-[11px] text-[#5E695E]">FanKO Store Direct UPI Checkout</p>
+                  <p className="text-[10px] text-[#5E695E]">FanKO Store Direct Verification</p>
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setUpiModalData(null)}
-                disabled={isProcessing}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
-                aria-label="Close payment modal"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Step-by-Step Payment Instructions Banner */}
-            <div className="p-3 bg-[#E8F5EE] border border-[#087A42]/20 rounded-2xl flex items-start gap-2.5">
-              <CheckCircle2 className="w-5 h-5 text-[#087A42] shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-bold text-[#087A42]">
-                  Two-Step Verified UPI Payment
-                </p>
-                <p className="text-[11px] text-[#202720] mt-0.5 leading-relaxed">
-                  1. Pay via Google Pay, PhonePe, Paytm, or QR code.<br />
-                  2. <strong>Upload your payment screenshot below</strong> to confirm and place your order.
-                </p>
+              <div className="flex items-center gap-2.5 shrink-0">
+                <div className="text-right">
+                  <span className="text-[9px] text-[#5E695E] uppercase font-bold tracking-wider block leading-none">Pay Amount</span>
+                  <span className="text-base sm:text-lg font-black text-[#087A42] tabular-nums leading-tight">
+                    ₹{upiModalData.amountToPay}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUpiModalData(null)}
+                  disabled={isProcessing}
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                  aria-label="Close payment modal"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-            </div>
-
-            {/* Payable Amount Highlight Card */}
-            <div className="p-4 bg-[#F7F8F6] rounded-2xl border border-[#E5E8E3] text-center space-y-1">
-              <span className="text-[11px] text-[#5E695E] font-medium">
-                {upiModalData.paymentType === 'cod' ? 'Advance Verification Token' : 'Total Amount to Pay'}
-              </span>
-              <div className="text-3xl font-extrabold text-[#087A42] tabular-nums">
-                ₹{upiModalData.amountToPay}
-              </div>
-              {upiModalData.paymentType === 'cod' ? (
-                <p className="text-[11px] text-[#5E695E] pt-1">
-                  Remaining <strong className="text-[#202720]">₹{upiModalData.balanceOnDelivery}</strong> will be collected in cash or UPI at your doorstep upon delivery.
-                </p>
-              ) : (
-                <p className="text-[11px] text-[#087A42] font-semibold pt-1">
-                  ₹0 to pay on delivery · 100% cleared
-                </p>
-              )}
             </div>
 
             {/* Hidden File Input for Payment Screenshot */}
@@ -897,146 +873,175 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               }}
             />
 
-            {/* STEP 1: Pay via Centered Big QR Code or UPI ID */}
-            <div className="space-y-4 pt-1 border-t border-[#E5E8E3]">
+            {/* STEP 1: Mobile-Friendly Payment Switcher */}
+            <div className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-[#087A42] uppercase tracking-wider flex items-center gap-1.5">
                   <span className="w-4 h-4 rounded-full bg-[#087A42] text-white text-[10px] flex items-center justify-center font-bold">1</span>
-                  <span>Step 1: Scan QR or Pay ₹{upiModalData.amountToPay}</span>
+                  <span>Step 1: Choose How to Pay</span>
                 </span>
-                <span className="text-[10px] font-bold text-[#087A42] bg-[#E8F5EE] px-2.5 py-0.5 rounded-full border border-emerald-200">
-                  Instant Verification
+                <span className="text-[10px] font-bold text-[#087A42] bg-[#E8F5EE] px-2 py-0.5 rounded-full border border-emerald-200">
+                  ₹{upiModalData.amountToPay}
                 </span>
               </div>
 
-              {/* BIG CENTERED QR CODE CARD */}
-              <div className="p-5 sm:p-6 bg-gradient-to-b from-[#F7F8F6] via-white to-emerald-50/40 border-2 border-emerald-400/60 rounded-3xl space-y-4 shadow-sm text-center">
-                
-                {/* Header */}
-                <div className="space-y-1">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E8F5EE] text-[#087A42] text-xs font-bold border border-emerald-200 shadow-2xs">
-                    <QrCode className="w-3.5 h-3.5 text-[#087A42]" />
-                    <span>Scan with GPay, PhonePe, or Paytm</span>
-                  </span>
-                  <h3 className="text-base sm:text-lg font-black text-[#202720]">
-                    Pay Exactly <span className="text-[#087A42]">₹{upiModalData.amountToPay}</span>
-                  </h3>
-                  <p className="text-[11px] text-[#5E695E]">
-                    Point your UPI camera at this QR code to pay instantly
+              {/* Segmented Switcher for Mobile: Scan QR vs Copy UPI ID */}
+              <div className="grid grid-cols-2 p-1 bg-[#F1F3F0] rounded-xl text-xs font-bold gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPaymentTab('qr')}
+                  className={`py-2 px-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    paymentTab === 'qr'
+                      ? 'bg-white text-[#087A42] shadow-xs font-black'
+                      : 'text-[#5E695E] hover:text-[#202720]'
+                  }`}
+                >
+                  <QrCode className="w-3.5 h-3.5" />
+                  <span>Scan QR Code</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPaymentTab('upi_id')}
+                  className={`py-2 px-2.5 rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    paymentTab === 'upi_id'
+                      ? 'bg-white text-[#087A42] shadow-xs font-black'
+                      : 'text-[#5E695E] hover:text-[#202720]'
+                  }`}
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copy UPI ID</span>
+                </button>
+              </div>
+
+              {/* OPTION A: Scan QR Code View (Mobile Centered & Fully Contained) */}
+              {paymentTab === 'qr' && (
+                <div className="p-3 bg-gradient-to-b from-[#F7F8F6] via-white to-emerald-50/30 border border-emerald-300 rounded-2xl text-center space-y-2.5 animate-in fade-in duration-150">
+                  {/* Big Responsive Centered QR Code Box (Never cuts off) */}
+                  <div className="flex justify-center">
+                    <div className="p-2 bg-white rounded-2xl border-2 border-[#087A42] shadow-xs inline-block">
+                      <div className="w-44 h-44 sm:w-52 sm:h-52 flex items-center justify-center bg-white rounded-xl overflow-hidden">
+                        <img
+                          src={upiModalData.qrCodeUrl}
+                          alt="UPI QR Code"
+                          className="max-w-full max-h-full object-contain mx-auto"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Centered Actions Grid */}
+                  <div className="grid grid-cols-2 gap-2 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={handleDownloadQr}
+                      className="py-2 px-2 bg-white hover:bg-slate-50 text-[#087A42] text-[11px] font-bold rounded-xl border border-emerald-300 shadow-2xs flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5 text-[#087A42]" />
+                      <span>Download QR</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleCopyUpiId}
+                      className="py-2 px-2 bg-[#087A42] hover:bg-[#066336] text-white text-[11px] font-bold rounded-xl shadow-xs flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
+                    >
+                      {copiedUpi ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy UPI ID</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Store UPI ID Bar */}
+                  <div className="px-2.5 py-1.5 bg-white rounded-xl border border-slate-200 text-[11px] flex items-center justify-between gap-1 shadow-2xs">
+                    <span className="text-[#5E695E] font-medium text-[10px]">UPI:</span>
+                    <span className="font-mono font-bold text-[#202720] truncate select-all">{upiModalData.upiId}</span>
+                    <button
+                      type="button"
+                      onClick={handleCopyUpiId}
+                      className="text-[10px] text-[#087A42] font-bold hover:underline shrink-0"
+                    >
+                      {copiedUpi ? '✓ Copied' : 'Copy'}
+                    </button>
+                  </div>
+
+                  <p className="text-[10px] text-[#5E695E] leading-tight">
+                    Scan with GPay, PhonePe, or Paytm camera. Or tap <strong>Download QR</strong> and select from gallery in GPay.
                   </p>
                 </div>
+              )}
 
-                {/* Big Centered QR Code Box */}
-                <div className="flex justify-center my-2">
-                  <div className="relative p-3.5 sm:p-4 bg-white rounded-3xl border-2 border-[#087A42] shadow-md hover:shadow-lg transition-shadow inline-block">
-                    <div className="w-56 h-56 sm:w-72 sm:h-72 flex items-center justify-center bg-white rounded-2xl overflow-hidden">
-                      <img
-                        src={upiModalData.qrCodeUrl}
-                        alt="UPI QR Code - Scan to Pay"
-                        className="w-full h-full object-contain"
-                      />
+              {/* OPTION B: Copy UPI ID View (Easiest for paying on the same phone) */}
+              {paymentTab === 'upi_id' && (
+                <div className="p-3 bg-gradient-to-br from-emerald-50/60 via-white to-teal-50/40 border border-emerald-300 rounded-2xl space-y-2.5 animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[#087A42] flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Direct In-App UPI Payment</span>
+                    </span>
+                    <span className="text-[10px] font-bold text-[#087A42] bg-[#E8F5EE] px-2 py-0.5 rounded-md border border-emerald-200">
+                      ₹{upiModalData.amountToPay}
+                    </span>
+                  </div>
+
+                  {/* 1-Tap Copy UPI ID Card */}
+                  <div className="bg-white p-3 rounded-xl border-2 border-emerald-200 flex items-center justify-between gap-2 shadow-xs">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[9px] text-[#5E695E] font-bold uppercase tracking-wider">Store UPI ID</p>
+                      <p className="font-mono font-black text-sm text-[#202720] truncate select-all">{upiModalData.upiId}</p>
                     </div>
-                    <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-[#087A42] text-white text-[10px] font-bold px-3 py-0.5 rounded-full shadow-xs uppercase tracking-wider whitespace-nowrap">
-                      ₹{upiModalData.amountToPay} · Scan &amp; Pay
+
+                    <button
+                      type="button"
+                      onClick={handleCopyUpiId}
+                      className="px-3.5 py-2 bg-[#087A42] hover:bg-[#066336] text-white text-xs font-bold rounded-xl shrink-0 flex items-center gap-1.5 transition-all shadow-xs active:scale-95 cursor-pointer"
+                    >
+                      {copiedUpi ? (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy ID</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {/* Compact 3-Step Instructions */}
+                  <div className="bg-white/80 p-2.5 rounded-xl border border-emerald-100 text-[11px] text-[#202720] space-y-1.5 leading-snug">
+                    <div className="flex items-center gap-2">
+                      <span className="w-4 h-4 rounded-full bg-[#087A42] text-white text-[10px] font-bold flex items-center justify-center shrink-0">1</span>
+                      <span>Copy UPI ID: <strong className="font-mono text-[#087A42]">{upiModalData.upiId}</strong></span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-4 h-4 rounded-full bg-[#087A42] text-white text-[10px] font-bold flex items-center justify-center shrink-0">2</span>
+                      <span>Open <strong>GPay</strong> or <strong>PhonePe</strong> → Select <strong>&quot;Pay UPI ID&quot;</strong></span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-4 h-4 rounded-full bg-[#087A42] text-white text-[10px] font-bold flex items-center justify-center shrink-0">3</span>
+                      <span>Paste &amp; pay exactly <strong className="text-[#087A42]">₹{upiModalData.amountToPay}</strong></span>
                     </div>
                   </div>
                 </div>
+              )}
 
-                {/* Centered Actions: Download QR & Copy UPI ID */}
-                <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={handleDownloadQr}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-[#087A42] text-xs font-bold rounded-xl border border-emerald-300 shadow-2xs transition-all active:scale-95 cursor-pointer"
-                  >
-                    <Download className="w-4 h-4 text-[#087A42]" />
-                    <span>Download QR Code</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleCopyUpiId}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#087A42] hover:bg-[#066336] text-white text-xs font-bold rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer"
-                  >
-                    {copiedUpi ? (
-                      <>
-                        <Check className="w-4 h-4" />
-                        <span>UPI ID Copied!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4" />
-                        <span>Copy UPI ID</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Centered UPI ID Bar */}
-                <div className="inline-flex items-center justify-center gap-2 px-3 py-1.5 bg-white rounded-xl border border-emerald-200 text-xs shadow-2xs max-w-full">
-                  <span className="text-[#5E695E] text-[11px] font-semibold">Store UPI ID:</span>
-                  <span className="font-mono font-bold text-[#202720] truncate select-all">{upiModalData.upiId}</span>
-                </div>
-
-                {/* Clear 4-Step Instructions */}
-                <div className="bg-white p-4 rounded-2xl border border-emerald-200/90 text-left space-y-2.5 shadow-2xs mt-3">
-                  <p className="text-xs font-bold text-[#202720] flex items-center gap-1.5">
-                    <span className="w-4 h-4 rounded-full bg-[#087A42] text-white text-[10px] flex items-center justify-center font-bold">✓</span>
-                    <span>How to Complete Payment:</span>
-                  </p>
-
-                  <div className="space-y-2 text-xs text-[#202720]">
-                    <div className="flex items-start gap-2.5">
-                      <span className="w-5 h-5 rounded-full bg-[#E8F5EE] text-[#087A42] font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-emerald-200">
-                        1
-                      </span>
-                      <div className="leading-relaxed">
-                        <strong>Scan the big QR code above</strong> with GPay or PhonePe, OR tap <strong>&quot;Copy UPI ID&quot;</strong>.
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-2.5">
-                      <span className="w-5 h-5 rounded-full bg-[#E8F5EE] text-[#087A42] font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-emerald-200">
-                        2
-                      </span>
-                      <div className="leading-relaxed">
-                        Pay exactly <strong>₹{upiModalData.amountToPay}</strong> in your Google Pay, PhonePe, or Paytm app.
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-2.5">
-                      <span className="w-5 h-5 rounded-full bg-[#E8F5EE] text-[#087A42] font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-emerald-200">
-                        3
-                      </span>
-                      <div className="leading-relaxed">
-                        Take a screenshot of the payment receipt clearly showing the <strong>Payment Date &amp; Time</strong> and <strong>Amount (₹{upiModalData.amountToPay})</strong>.
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-2.5">
-                      <span className="w-5 h-5 rounded-full bg-[#E8F5EE] text-[#087A42] font-black text-[11px] flex items-center justify-center shrink-0 mt-0.5 border border-emerald-200">
-                        4
-                      </span>
-                      <div className="leading-relaxed">
-                        Upload the screenshot in <strong>Step 2</strong> below. Once our team verifies your payment screenshot by matching the <strong>Payment Date &amp; Time</strong>, your order is placed and confirmed!
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Verification Notice */}
-                <div className="text-[11px] text-[#087A42] bg-[#E8F5EE] p-3 rounded-xl border border-emerald-200/90 flex items-start gap-2.5 text-left leading-relaxed">
-                  <Clock className="w-4 h-4 text-[#087A42] shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-bold text-[#202720]">
-                      Order Verified by Payment Date &amp; Time:
-                    </p>
-                    <p className="text-[11px] text-[#202720]/80 mt-0.5">
-                      Once uploaded, our team verifies the payment receipt by matching the exact <strong>Payment Date &amp; Time</strong> against bank records for immediate order placement and dispatch.
-                    </p>
-                  </div>
-                </div>
-
+              {/* Compact Verification Notice */}
+              <div className="text-[11px] text-[#087A42] bg-[#E8F5EE] p-2.5 rounded-xl border border-emerald-200/90 flex items-start gap-2 leading-tight">
+                <Clock className="w-3.5 h-3.5 text-[#087A42] shrink-0 mt-0.5" />
+                <p>
+                  <strong>Verified by Date &amp; Time:</strong> Take a screenshot of the receipt showing payment date &amp; time and upload it below to confirm your order!
+                </p>
               </div>
             </div>
 
