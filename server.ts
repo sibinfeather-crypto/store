@@ -10,14 +10,16 @@ dotenv.config();
 const app = express();
 const PORT = 3000;
 
-// Middleware for parsing JSON with raw body capture for webhook signature verification
+// Middleware for parsing JSON (15mb limit to support payment screenshot uploads)
 app.use(
   express.json({
+    limit: '15mb',
     verify: (req: any, _res, buf) => {
       req.rawBody = buf;
     },
   })
 );
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Admin token cache (in-memory for active sessions)
 const activeAdminTokens = new Set<string>();

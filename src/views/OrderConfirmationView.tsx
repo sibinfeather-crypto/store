@@ -7,7 +7,10 @@ import {
   Truck,
   MapPin,
   Clock,
-  ShieldCheck
+  ShieldCheck,
+  Eye,
+  X,
+  Image as ImageIcon
 } from 'lucide-react';
 import type { Order } from '../types/index.ts';
 import { api } from '../services/api.ts';
@@ -26,6 +29,7 @@ export const OrderConfirmationView: React.FC<OrderConfirmationViewProps> = ({
   const [order, setOrder] = useState<Order | null>(cachedOrder || null);
   const [loading, setLoading] = useState(!cachedOrder);
   const [error, setError] = useState<string | null>(null);
+  const [showProofModal, setShowProofModal] = useState<boolean>(false);
 
   useEffect(() => {
     if (!cachedOrder && orderNumber) {
@@ -175,6 +179,23 @@ export const OrderConfirmationView: React.FC<OrderConfirmationViewProps> = ({
               </div>
             )}
 
+            {order.paymentDetails?.paymentProofUrl && (
+              <div className="flex items-center justify-between p-2 bg-[#E8F5EE] rounded-xl border border-[#087A42]/20">
+                <span className="flex items-center gap-1.5 font-semibold text-[#087A42]">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-[#087A42]" />
+                  <span>Payment Proof:</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowProofModal(true)}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-[#087A42] hover:underline cursor-pointer"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  <span>View Screenshot</span>
+                </button>
+              </div>
+            )}
+
             <div className="flex justify-between pt-1 border-t border-[#E5E8E3]">
               <span>Estimated Delivery:</span>
               <strong className="text-[#202720]">{order.shippingDetails?.estimatedDelivery || '3-5 business days'}</strong>
@@ -260,6 +281,43 @@ export const OrderConfirmationView: React.FC<OrderConfirmationViewProps> = ({
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
       </div>
+
+      {/* Customer Payment Screenshot Modal */}
+      {showProofModal && order.paymentDetails?.paymentProofUrl && (
+        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-[#E5E8E3]">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-[#087A42]" />
+                <h4 className="text-xs font-bold text-[#202720]">Uploaded Payment Proof</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowProofModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="max-h-[65vh] overflow-auto flex items-center justify-center bg-slate-50 rounded-2xl p-2 border border-[#E5E8E3]">
+              <img
+                src={order.paymentDetails.paymentProofUrl}
+                alt="Payment screenshot proof"
+                className="max-h-[60vh] max-w-full object-contain rounded-xl"
+              />
+            </div>
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => setShowProofModal(false)}
+                className="px-4 py-2 bg-[#087A42] hover:bg-[#066336] text-white text-xs font-bold rounded-xl cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

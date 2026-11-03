@@ -19,7 +19,10 @@ import {
   Upload,
   Image as ImageIcon,
   X,
-  Info
+  Info,
+  Eye,
+  Trash2,
+  RefreshCw,
 } from 'lucide-react';
 import { useCart } from '../context/CartContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
@@ -74,12 +77,23 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // UPI Payment Modal State (Automatic Confirmation - No UTR needed)
+  // UPI Payment Modal State
   const [upiModalData, setUpiModalData] = useState<UpiModalData | null>(null);
   const [selectedApp, setSelectedApp] = useState<'gpay' | 'phonepe' | 'paytm' | 'other'>('gpay');
   const [appOpened, setAppOpened] = useState(false);
   const [copiedUpi, setCopiedUpi] = useState(false);
   const [verificationStatus, setVerificationStatus] = useState<string | null>(null);
+
+  // Buyer Payment Proof Screenshot State (Required before order confirmation)
+  const [paymentProofUrl, setPaymentProofUrl] = useState<string | null>(null);
+  const [screenshotFileName, setScreenshotFileName] = useState<string | null>(null);
+  const [screenshotFileSize, setScreenshotFileSize] = useState<string | null>(null);
+  const [screenshotError, setScreenshotError] = useState<string | null>(null);
+  const [isCompressingProof, setIsCompressingProof] = useState<boolean>(false);
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
+  const [showScreenshotWarning, setShowScreenshotWarning] = useState<boolean>(false);
+  const [previewScreenshotModal, setPreviewScreenshotModal] = useState<boolean>(false);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     api.getSettings().then((s) => {
@@ -183,20 +197,126 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
       setAppOpened(false);
       setVerificationStatus(null);
       setIsProcessing(false);
+      // Reset payment screenshot state for new payment session
+      setPaymentProofUrl(null);
+      setScreenshotFileName(null);
+      setScreenshotFileSize(null);
+      setScreenshotError(null);
+      setShowScreenshotWarning(false);
     } catch (err: any) {
       setIsProcessing(false);
       setError(err.message || 'Failed to initialize payment. Please try again.');
     }
   };
 
-  // Automatically open the chosen UPI app (GPay / PhonePe / Paytm / Universal UPI)
-  const handleLaunchUpiApp = (app: 'gpay' | 'phonepe' | 'paytm' | 'other') => {
-    setSelectedApp(app);
-    handlePayNow(app);
+  // Image compressor using offscreen HTML canvas (max dimension 1200px, quality 0.82)
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1200;
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(e.target?.result as string);
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+          resolve(compressedDataUrl);
+        };
+        img.onerror = () => reject(new Error('Failed to load image for compression'));
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
   };
 
-  // Buyer clicks "Pay Now" -> Immediately redirect to GPay, PhonePe, or phone available apps and complete order
-  const handlePayNow = async (appOverride?: 'gpay' | 'phonepe' | 'paytm' | 'other') => {
+  // Process selected or dropped screenshot file
+  const handleProcessScreenshotFile = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setScreenshotError('Please select a valid image file (PNG, JPG, JPEG, WEBP).');
+      return;
+    }
+
+    if (file.size > 25 * 1024 * 1024) {
+      setScreenshotError('File size is too large (maximum 25MB).');
+      return;
+    }
+
+    setIsCompressingProof(true);
+    setScreenshotError(null);
+    setShowScreenshotWarning(false);
+
+    try {
+      const compressedDataUrl = await compressImage(file);
+      const sizeInKb = Math.round((compressedDataUrl.length * 3) / 4 / 1024);
+      setPaymentProofUrl(compressedDataUrl);
+      setScreenshotFileName(file.name);
+      setScreenshotFileSize(`${sizeInKb} KB`);
+      setIsCompressingProof(false);
+    } catch {
+      setIsCompressingProof(false);
+      setScreenshotError('Could not process screenshot image. Please try another file.');
+    }
+  };
+
+  const handleRemoveScreenshot = () => {
+    setPaymentProofUrl(null);
+    setScreenshotFileName(null);
+    setScreenshotFileSize(null);
+    setScreenshotError(null);
+    setShowScreenshotWarning(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Listen for clipboard image paste when payment modal is active
+  useEffect(() => {
+    if (!upiModalData) return;
+
+    const handlePaste = (e: ClipboardEvent) => {
+      if (e.clipboardData && e.clipboardData.files && e.clipboardData.files.length > 0) {
+        const file = e.clipboardData.files[0];
+        if (file && file.type.startsWith('image/')) {
+          handleProcessScreenshotFile(file);
+        }
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => {
+      window.removeEventListener('paste', handlePaste);
+    };
+  }, [upiModalData]);
+
+  // Open the chosen UPI app (GPay / PhonePe / Paytm / Universal UPI) on buyer's phone
+  const handleLaunchUpiApp = (app: 'gpay' | 'phonepe' | 'paytm' | 'other') => {
+    setSelectedApp(app);
+    handleOpenUpiApp(app);
+  };
+
+  const handleOpenUpiApp = (appOverride?: 'gpay' | 'phonepe' | 'paytm' | 'other') => {
     if (!upiModalData) return;
     const targetApp = appOverride || selectedApp || 'other';
     setSelectedApp(targetApp);
@@ -207,7 +327,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
     else if (targetApp === 'phonepe') targetUri = upiModalData.phonepeUri;
     else if (targetApp === 'paytm') targetUri = upiModalData.paytmUri;
 
-    // Immediately trigger redirect to GPay, PhonePe, or phone available apps
+    // Trigger redirect to GPay, PhonePe, or phone available apps
     window.location.href = targetUri;
 
     // Fallback: in case app scheme isn't registered, fallback to generic UPI after brief timeout
@@ -216,10 +336,24 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         window.location.href = upiModalData.upiUri;
       }
     }, 1200);
+  };
 
-    // Automatically confirm and place the order
+  // Order Confirmation: ONLY allowed when buyer has uploaded their payment screenshot!
+  const handleConfirmOrderWithScreenshot = async () => {
+    if (!upiModalData) return;
+
+    // Buyer payment screenshot is strictly required before order confirmation
+    if (!paymentProofUrl) {
+      setShowScreenshotWarning(true);
+      setScreenshotError('Payment screenshot is required to confirm your order. Please upload your payment proof above.');
+      if (fileInputRef.current) {
+        fileInputRef.current.click();
+      }
+      return;
+    }
+
     setIsProcessing(true);
-    setVerificationStatus('Confirming payment and placing order...');
+    setVerificationStatus('Verifying payment screenshot and placing order...');
     setError(null);
 
     try {
@@ -228,8 +362,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
         quantity: i.quantity,
       }));
 
-      // Brief delay to allow native app scheme switch
-      await new Promise((resolve) => setTimeout(resolve, 800));
+      const targetApp = selectedApp || 'other';
 
       let result: { success: boolean; order: Order };
       if (upiModalData.paymentType === 'cod') {
@@ -238,6 +371,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
           items: payloadItems,
           couponCode: couponCode || undefined,
           upiApp: targetApp,
+          paymentProofUrl: paymentProofUrl,
         });
       } else {
         result = await api.createUpiOrder({
@@ -245,12 +379,15 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
           items: payloadItems,
           couponCode: couponCode || undefined,
           upiApp: targetApp,
+          paymentProofUrl: paymentProofUrl,
         });
       }
 
       clearCart();
       setIsProcessing(false);
       setUpiModalData(null);
+      setPaymentProofUrl(null);
+      setScreenshotFileName(null);
       setVerificationStatus(null);
       onOrderCompleted(result.order);
       onNavigate('order-confirmation', result.order.orderNumber);
@@ -686,15 +823,16 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               </button>
             </div>
 
-            {/* Automatic Payment Confirmation Notice */}
+            {/* Step-by-Step Payment Instructions Banner */}
             <div className="p-3 bg-[#E8F5EE] border border-[#087A42]/20 rounded-2xl flex items-start gap-2.5">
               <CheckCircle2 className="w-5 h-5 text-[#087A42] shrink-0 mt-0.5" />
               <div>
                 <p className="text-xs font-bold text-[#087A42]">
-                  Automatic Payment Confirmation
+                  Two-Step Verified UPI Payment
                 </p>
                 <p className="text-[11px] text-[#202720] mt-0.5 leading-relaxed">
-                  Pay via any UPI app or scan the QR code. Your order is confirmed automatically — <strong>no UTR number needed</strong>.
+                  1. Pay via Google Pay, PhonePe, Paytm, or QR code.<br />
+                  2. <strong>Upload your payment screenshot below</strong> to confirm and place your order.
                 </p>
               </div>
             </div>
@@ -702,7 +840,7 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
             {/* Payable Amount Highlight Card */}
             <div className="p-4 bg-[#F7F8F6] rounded-2xl border border-[#E5E8E3] text-center space-y-1">
               <span className="text-[11px] text-[#5E695E] font-medium">
-                {upiModalData.paymentType === 'cod' ? 'Advance Verification Token' : 'Total Amount to Pay Now'}
+                {upiModalData.paymentType === 'cod' ? 'Advance Verification Token' : 'Total Amount to Pay'}
               </span>
               <div className="text-3xl font-extrabold text-[#087A42] tabular-nums">
                 ₹{upiModalData.amountToPay}
@@ -718,12 +856,30 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               )}
             </div>
 
-            {/* Direct App Launchers: Automatically open GPay, PhonePe, Paytm */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-[#202720] block">
-                Tap to Open UPI App on Your Phone:
-              </label>
+            {/* Hidden File Input for Payment Screenshot */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files && e.target.files[0]) {
+                  handleProcessScreenshotFile(e.target.files[0]);
+                }
+              }}
+            />
 
+            {/* STEP 1: Pay via UPI Apps or QR Code */}
+            <div className="space-y-3 pt-1 border-t border-[#E5E8E3]">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#087A42] uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="w-4 h-4 rounded-full bg-[#087A42] text-white text-[10px] flex items-center justify-center font-bold">1</span>
+                  <span>Step 1: Open UPI App to Pay</span>
+                </span>
+                <span className="text-[10px] text-[#5E695E]">Any UPI App</span>
+              </div>
+
+              {/* Direct App Launchers */}
               <div className="grid grid-cols-3 gap-2">
                 {/* Google Pay */}
                 <button
@@ -768,50 +924,53 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
                 </button>
               </div>
 
-              {/* Any other UPI App */}
+              {/* Pay Now Button (Direct Launch) */}
               <button
                 type="button"
-                onClick={() => handleLaunchUpiApp('other')}
-                className="w-full py-2 bg-[#F7F8F6] hover:bg-[#E5E8E3] text-[#202720] text-xs font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                onClick={() => handleOpenUpiApp(selectedApp || 'other')}
+                className="w-full py-3 bg-[#087A42] hover:bg-[#066336] text-white text-xs sm:text-sm font-bold rounded-xl flex items-center justify-center gap-2 shadow-xs transition-all active:scale-[0.98] cursor-pointer"
               >
-                <Smartphone className="w-3.5 h-3.5 text-[#087A42]" />
-                <span>Open Any Other UPI App (BHIM, CRED, Navi)</span>
+                <Smartphone className="w-4 h-4 text-emerald-200" />
+                <span>Pay Now · ₹{upiModalData.amountToPay} via {selectedApp === 'gpay' ? 'GPay' : selectedApp === 'phonepe' ? 'PhonePe' : selectedApp === 'paytm' ? 'Paytm' : 'UPI'}</span>
+                <ChevronRight className="w-4 h-4 text-emerald-200" />
               </button>
-            </div>
 
-            {/* App opened feedback */}
-            {appOpened && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-center gap-2 animate-in fade-in">
-                <CheckCircle2 className="w-4 h-4 text-[#087A42] shrink-0" />
-                <span>UPI app opened! Complete payment in app, then tap "Confirm Order" below.</span>
-              </div>
-            )}
+              {/* App opened feedback */}
+              {appOpened && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800 flex items-start gap-2 animate-in fade-in">
+                  <CheckCircle2 className="w-4 h-4 text-[#087A42] shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold">UPI App Launched!</span>
+                    <p className="text-[11px] text-emerald-700 mt-0.5">
+                      Once payment is completed, take a screenshot of the receipt and upload it in <strong>Step 2</strong> below to confirm your order.
+                    </p>
+                  </div>
+                </div>
+              )}
 
-            {/* QR Code Section (for Desktop or Scanning) */}
-            <div className="p-3.5 bg-white border border-[#E5E8E3] rounded-2xl flex flex-col sm:flex-row items-center gap-4">
-              <div className="w-28 h-28 bg-[#F7F8F6] p-1.5 rounded-xl border border-slate-200 flex items-center justify-center shrink-0">
-                <img
-                  src={upiModalData.qrCodeUrl}
-                  alt="UPI QR Code"
-                  className="w-full h-full object-contain"
-                />
-              </div>
+              {/* QR Code Section (Scan with any app or on desktop) */}
+              <div className="p-3 bg-[#F7F8F6] border border-[#E5E8E3] rounded-2xl flex items-center gap-3.5">
+                <div className="w-20 h-20 bg-white p-1 rounded-xl border border-slate-200 flex items-center justify-center shrink-0">
+                  <img
+                    src={upiModalData.qrCodeUrl}
+                    alt="UPI QR Code"
+                    className="w-full h-full object-contain"
+                  />
+                </div>
 
-              <div className="space-y-1.5 text-center sm:text-left flex-1 min-w-0">
-                <p className="text-xs font-bold text-[#202720] flex items-center justify-center sm:justify-start gap-1">
-                  <QrCode className="w-3.5 h-3.5 text-[#087A42]" />
-                  <span>Or Scan QR with Any App</span>
-                </p>
-                <p className="text-[11px] text-[#5E695E]">
-                  Scan via GPay, PhonePe, Paytm, or BHIM camera.
-                </p>
+                <div className="space-y-1 flex-1 min-w-0">
+                  <p className="text-xs font-bold text-[#202720] flex items-center gap-1">
+                    <QrCode className="w-3.5 h-3.5 text-[#087A42]" />
+                    <span>Or Scan QR Code</span>
+                  </p>
+                  <p className="text-[10px] text-[#5E695E]">
+                    Scan using any UPI app camera or copy UPI ID:
+                  </p>
 
-                {/* Copy UPI ID */}
-                <div className="pt-1">
                   <button
                     type="button"
                     onClick={handleCopyUpiId}
-                    className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold bg-[#F7F8F6] hover:bg-[#E5E8E3] text-[#202720] px-2.5 py-1 rounded-lg border border-[#E5E8E3] transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 text-[11px] font-mono font-bold bg-white hover:bg-slate-50 text-[#202720] px-2.5 py-1 rounded-lg border border-[#E5E8E3] transition-colors cursor-pointer"
                   >
                     {copiedUpi ? (
                       <>
@@ -829,7 +988,140 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               </div>
             </div>
 
-            {/* Error Message if any */}
+            {/* STEP 2: Upload Payment Screenshot (Mandatory for confirmation) */}
+            <div className="space-y-2.5 pt-2 border-t border-[#E5E8E3]">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-[#087A42] uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="w-4 h-4 rounded-full bg-[#087A42] text-white text-[10px] flex items-center justify-center font-bold">2</span>
+                  <span>Step 2: Upload Payment Screenshot</span>
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                  Required
+                </span>
+              </div>
+
+              {/* Upload Zone when NO screenshot attached */}
+              {!paymentProofUrl ? (
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragOver(true);
+                  }}
+                  onDragLeave={() => setIsDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragOver(false);
+                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                      handleProcessScreenshotFile(e.dataTransfer.files[0]);
+                    }
+                  }}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`p-4 sm:p-5 rounded-2xl border-2 border-dashed text-center transition-all cursor-pointer ${
+                    showScreenshotWarning || screenshotError
+                      ? 'border-rose-400 bg-rose-50/60 ring-2 ring-rose-300'
+                      : isDragOver
+                      ? 'border-[#087A42] bg-[#E8F5EE]/40'
+                      : 'border-[#087A42]/40 bg-[#F7F8F6] hover:bg-[#E8F5EE]/30'
+                  }`}
+                >
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <div className="w-11 h-11 rounded-2xl bg-[#E8F5EE] text-[#087A42] flex items-center justify-center shadow-xs">
+                      {isCompressingProof ? (
+                        <div className="w-5 h-5 border-2 border-[#087A42] border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Upload className="w-5 h-5" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-[#202720]">
+                        {isCompressingProof
+                          ? 'Optimizing Screenshot Image...'
+                          : 'Tap to Upload Payment Screenshot'}
+                      </p>
+                      <p className="text-[11px] text-[#5E695E] mt-0.5">
+                        Take a screenshot in GPay/PhonePe/Paytm after payment and select it here.
+                      </p>
+                    </div>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-medium text-[#087A42] bg-white px-2.5 py-1 rounded-lg border border-[#E5E8E3] shadow-2xs">
+                      <ImageIcon className="w-3 h-3" />
+                      <span>Supports PNG, JPG, Camera & Clipboard Paste</span>
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                /* Screenshot Preview Card when attached */
+                <div className="p-3 bg-white border-2 border-[#087A42] rounded-2xl flex items-center justify-between gap-3 shadow-xs animate-in fade-in">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      onClick={() => setPreviewScreenshotModal(true)}
+                      className="w-14 h-14 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden shrink-0 cursor-pointer hover:opacity-90 transition-opacity relative group"
+                      title="Click to view full preview"
+                    >
+                      <img
+                        src={paymentProofUrl}
+                        alt="Payment Proof"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                        <Eye className="w-4 h-4" />
+                      </div>
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-[#087A42] shrink-0" />
+                        <span className="text-xs font-bold text-[#087A42]">Screenshot Attached</span>
+                      </div>
+                      <p className="text-[11px] font-medium text-[#202720] truncate mt-0.5">
+                        {screenshotFileName || 'payment_receipt.jpg'}
+                      </p>
+                      <p className="text-[10px] text-[#5E695E]">
+                        {screenshotFileSize} · Ready for instant confirmation
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewScreenshotModal(true)}
+                      className="p-1.5 text-slate-500 hover:text-[#087A42] hover:bg-[#E8F5EE] rounded-lg transition-colors cursor-pointer"
+                      title="Preview screenshot"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-1.5 text-slate-500 hover:text-[#087A42] hover:bg-[#E8F5EE] rounded-lg transition-colors cursor-pointer"
+                      title="Replace with different screenshot"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRemoveScreenshot}
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                      title="Remove screenshot"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Warning or Error Message */}
+              {(screenshotError || showScreenshotWarning) && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <span className="text-[11px] font-medium">
+                    {screenshotError || 'Payment screenshot is required to confirm your order. Please upload payment proof.'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* General Error Message if any */}
             {error && (
               <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
@@ -837,52 +1129,108 @@ export const CheckoutView: React.FC<CheckoutViewProps> = ({
               </div>
             )}
 
-            {/* Primary Action Button: "Pay Now" redirecting to GPay / PhonePe / Phone apps */}
-            <div className="pt-2 space-y-2.5">
+            {/* STEP 3: Confirm Order Action (Gated strictly on Screenshot) */}
+            <div className="pt-2 space-y-2.5 border-t border-[#E5E8E3]">
+              {paymentProofUrl ? (
+                /* Unlocked: Ready to Confirm Order */
+                <button
+                  type="button"
+                  onClick={handleConfirmOrderWithScreenshot}
+                  disabled={isProcessing}
+                  className="w-full py-4 bg-[#087A42] hover:bg-[#066336] text-white text-sm sm:text-base font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                >
+                  {isProcessing ? (
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>{verificationStatus || 'Confirming Order...'}</span>
+                    </div>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-5 h-5 text-emerald-200" />
+                      <span>Confirm Order · ₹{upiModalData.amountToPay}</span>
+                      <ChevronRight className="w-4 h-4 text-emerald-200" />
+                    </>
+                  )}
+                </button>
+              ) : (
+                /* Locked: Prompt to upload screenshot first */
+                <div className="space-y-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowScreenshotWarning(true);
+                      setScreenshotError('Please upload your payment screenshot above to confirm your order.');
+                      fileInputRef.current?.click();
+                    }}
+                    className="w-full py-4 bg-[#F7F8F6] hover:bg-[#E8F5EE] border-2 border-dashed border-[#087A42]/50 text-[#087A42] text-xs sm:text-sm font-bold rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs active:scale-[0.99]"
+                  >
+                    <Upload className="w-4 h-4 text-[#087A42]" />
+                    <span>Upload Payment Screenshot to Confirm Order</span>
+                  </button>
+                  <p className="text-[10px] text-center text-[#5E695E]">
+                    Order confirmation is unlocked after attaching the payment screenshot.
+                  </p>
+                </div>
+              )}
+
               <button
                 type="button"
-                onClick={() => handlePayNow(selectedApp || 'other')}
-                disabled={isProcessing}
-                className="w-full py-4 bg-[#087A42] hover:bg-[#066336] text-white text-sm sm:text-base font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
-              >
-                {isProcessing ? (
-                  <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>{verificationStatus || 'Processing Payment...'}</span>
-                  </div>
-                ) : (
-                  <>
-                    <Smartphone className="w-5 h-5 text-emerald-200" />
-                    <span>Pay Now · ₹{upiModalData.amountToPay}</span>
-                    <ChevronRight className="w-4 h-4 text-emerald-200" />
-                  </>
-                )}
-              </button>
-
-              <div className="flex items-center justify-center gap-2 text-[11px] text-[#5E695E]">
-                <span>Redirects to:</span>
-                <span className="font-semibold text-[#202720]">Google Pay</span>
-                <span>•</span>
-                <span className="font-semibold text-[#5f259f]">PhonePe</span>
-                <span>•</span>
-                <span className="font-semibold text-[#002970]">Paytm / UPI</span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setUpiModalData(null)}
+                onClick={() => {
+                  setUpiModalData(null);
+                  handleRemoveScreenshot();
+                }}
                 disabled={isProcessing}
                 className="w-full py-2 text-xs font-semibold text-[#5E695E] hover:text-[#202720] transition-colors cursor-pointer text-center"
               >
-                Back to Checkout / Change Address
+                Cancel / Change Address
               </button>
             </div>
 
             <p className="text-[10px] text-center text-slate-400 flex items-center justify-center gap-1 pt-1 border-t border-[#E5E8E3]">
               <Lock className="w-3 h-3 text-[#087A42]" />
-              <span>Direct Bank to Bank UPI Payment · 100% Safe & Instant</span>
+              <span>Direct Bank to Bank UPI Payment · 100% Safe & Verified</span>
             </p>
 
+          </div>
+        </div>
+      )}
+
+      {/* Full Screenshot Preview Modal for Buyer */}
+      {previewScreenshotModal && paymentProofUrl && (
+        <div className="fixed inset-0 z-60 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-5 space-y-3 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-[#E5E8E3]">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-[#087A42]" />
+                <h4 className="text-xs font-bold text-[#202720]">Payment Screenshot Preview</h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewScreenshotModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="max-h-[65vh] overflow-auto flex items-center justify-center bg-slate-50 rounded-2xl p-2 border border-[#E5E8E3]">
+              <img
+                src={paymentProofUrl}
+                alt="Uploaded Payment Receipt"
+                className="max-h-[60vh] max-w-full object-contain rounded-xl"
+              />
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] text-[#5E695E] truncate">
+                {screenshotFileName || 'payment_receipt.jpg'} ({screenshotFileSize})
+              </span>
+              <button
+                type="button"
+                onClick={() => setPreviewScreenshotModal(false)}
+                className="px-4 py-2 bg-[#087A42] hover:bg-[#066336] text-white text-xs font-bold rounded-xl cursor-pointer"
+              >
+                Looks Good
+              </button>
+            </div>
           </div>
         </div>
       )}
