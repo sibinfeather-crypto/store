@@ -1318,7 +1318,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({ onNaviga
                         : `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=10&data=${encodeURIComponent(
                             `upi://pay?pa=${settingsForm.upiId || 'fankostore@okhdfcbank'}&pn=${encodeURIComponent(
                               settingsForm.upiPayeeName || 'FanKO Store'
-                            )}&cu=INR&tn=OrderPreview`
+                            )}&cu=INR`
                           )}`
                     }
                     alt="Live UPI QR Preview"

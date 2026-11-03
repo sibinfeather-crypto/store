@@ -422,17 +422,17 @@ app.get('/api/pincode/check/:pincode', (req, res) => {
 // UPI & Cash on Delivery (COD with ₹99 Advance) Endpoints
 // -------------------------------------------------------------
 
-// Helper to generate UPI intent URLs for NPCI and mobile apps
+// Helper to generate UPI intent URLs for NPCI and mobile apps (without note as requested)
 function generateUpiIntentUrls(params: {
   upiId: string;
   payeeName: string;
   amount: number;
-  orderNumber: string;
+  orderNumber?: string;
 }) {
-  const { upiId, payeeName, amount, orderNumber } = params;
+  const { upiId, payeeName, amount } = params;
   const encodedName = encodeURIComponent(payeeName);
-  const note = encodeURIComponent(`Order ${orderNumber}`);
-  const baseQuery = `pa=${encodeURIComponent(upiId)}&pn=${encodedName}&am=${amount}&cu=INR&tn=${note}`;
+  // Transaction note (tn) removed so no order reference appears in GPay or UPI apps
+  const baseQuery = `pa=${encodeURIComponent(upiId)}&pn=${encodedName}&am=${amount}&cu=INR`;
 
   return {
     upiUri: `upi://pay?${baseQuery}`,

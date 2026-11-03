@@ -687,8 +687,8 @@ export const api = {
       const upiId = settings.upiId || 'fankostore@okhdfcbank';
       const payeeName = settings.upiPayeeName || 'FanKO Store';
       const orderNumber = data.orderRef || `FKO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-      const note = encodeURIComponent(`Order ${orderNumber}`);
-      const baseQuery = `pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${data.amount}&cu=INR&tn=${note}`;
+      // Transaction note (tn) removed so no order reference appears in GPay or UPI apps
+      const baseQuery = `pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(payeeName)}&am=${data.amount}&cu=INR`;
       const defaultQr = `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=10&data=${encodeURIComponent(`upi://pay?${baseQuery}`)}`;
       const finalQr = settings.upiQrMode === 'custom' && settings.customUpiQrUrl ? settings.customUpiQrUrl : defaultQr;
 
