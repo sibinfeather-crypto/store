@@ -52,6 +52,15 @@ function getStoredProducts(): Product[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
+        const existingIds = new Set(parsed.map((p: Product) => p.id));
+        const missing = defaultProducts.filter((p) => !existingIds.has(p.id));
+        if (missing.length > 0) {
+          const merged = [...parsed, ...missing];
+          try {
+            localStorage.setItem('fanko_products', JSON.stringify(merged));
+          } catch {}
+          return merged;
+        }
         return parsed;
       }
     }

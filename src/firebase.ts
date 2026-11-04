@@ -79,6 +79,16 @@ export async function getProductsFromFirestore(): Promise<Product[]> {
       } as Product;
     });
 
+    // Auto-seed any newly added default products if missing from Firestore
+    const existingIds = new Set(products.map((p) => p.id));
+    const missingDefaults = defaultProducts.filter((dp) => !existingIds.has(dp.id));
+    if (missingDefaults.length > 0) {
+      for (const dp of missingDefaults) {
+        saveProductToFirestore(dp).catch((e) => console.warn('Could not auto-seed product:', dp.id, e));
+        products.push(dp);
+      }
+    }
+
     // Sort newest first
     products.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     return products;
